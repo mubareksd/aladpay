@@ -11,6 +11,7 @@ import {
   buildPayload,
   formatTransactionAmount,
   getAccountInputMeta,
+  isYayaWallet,
   usesWalletPhone,
   type Bank,
 } from "@/lib/ethiopian-bank-qr";
@@ -83,6 +84,7 @@ export function BankQrGenerator() {
   );
 
   const isWallet = selectedBankOption ? usesWalletPhone(selectedBankOption) : false;
+  const isYaya = selectedBankOption ? isYayaWallet(selectedBankOption) : false;
 
   const pickBank = useCallback(
     (bic: string) => {
@@ -461,11 +463,32 @@ export function BankQrGenerator() {
                 className={fieldClass}
               />
               <p className="mt-1 text-[11px] text-muted">
-                {isWallet
-                  ? "Optional note encoded in tag 62 (purpose). Wallets do not use tag 80."
-                  : "Shown to the payer when supported (NBE context tag 80 and purpose in tag 62)."}
+                {isYaya
+                  ? "Optional tag 62-08 text. Leave blank to use Pay to YAYA:yourusername."
+                  : isWallet
+                    ? "Optional note encoded in tag 62 (purpose). CBE Birr does not use tag 80."
+                    : "Shown to the payer when supported (NBE context tag 80 and purpose in tag 62)."}
               </p>
             </div>
+
+            {isYaya ? (
+              <div>
+                <label htmlFor="till" className="mb-1 block text-xs font-medium text-muted">
+                  Yaya username
+                </label>
+                <input
+                  id="till"
+                  value={form.till}
+                  onChange={(e) => updateField("till", e.target.value)}
+                  placeholder="mengstabkete"
+                  autoComplete="username"
+                  className={fieldClass}
+                />
+                <p className="mt-1 text-[11px] text-muted">
+                  Your handle in the Yaya app (stored as YAYA plus username in the QR).
+                </p>
+              </div>
+            ) : null}
 
             {isWallet ? null : (
               <div className="grid gap-4 md:grid-cols-2">
@@ -498,12 +521,13 @@ export function BankQrGenerator() {
 
             <div>
               <label htmlFor="city" className="mb-1 block text-xs font-medium text-muted">
-                City
+                {isYaya ? "Address" : "City"}
               </label>
               <input
                 id="city"
                 value={form.city}
                 onChange={(e) => updateField("city", e.target.value)}
+                placeholder={isYaya ? "Woreda 06, Bole, Addis Ababa" : undefined}
                 className={fieldClass}
               />
             </div>
@@ -527,13 +551,15 @@ export function BankQrGenerator() {
                 </option>
               </select>
               <p className="mt-1 text-[11px] leading-relaxed text-muted">
-                {isWallet
-                  ? `${selectedBankOption?.name ?? "This wallet"} uses IPS ET with your wallet phone in the account field.`
-                  : "Use IPS ET for Dashen, Awash, and other banks on the national QR network. Try legacy only if your bank gave you that older layout (some Abyssinia QRs)."}
+                {isYaya
+                  ? "Yaya uses IPS ET with a merchant GUID, nine-digit phone in tag 28, and Yaya-specific tag 62 fields."
+                  : isWallet
+                    ? "CBE Birr uses IPS ET with your full wallet phone (251…) in tag 28."
+                    : "Use IPS ET for Dashen, Awash, and other banks on the national QR network. Try legacy only if your bank gave you that older layout (some Abyssinia QRs)."}
               </p>
             </div>
 
-            {form.encoding === "ips" ? (
+            {form.encoding === "ips" && (!isWallet || isYaya) ? (
               <div>
                 <label htmlFor="merchantGuid" className="mb-1 block text-xs font-medium text-muted">
                   Merchant GUID (optional)
@@ -542,7 +568,11 @@ export function BankQrGenerator() {
                   id="merchantGuid"
                   value={form.merchantGuid}
                   onChange={(e) => updateField("merchantGuid", e.target.value)}
-                  placeholder="32 hex chars from your bank, or leave blank"
+                  placeholder={
+                    isYaya
+                      ? "32 hex chars from Yaya, or leave blank to derive"
+                      : "32 hex chars from your bank, or leave blank"
+                  }
                   className={`${fieldClass} font-mono text-xs`}
                   spellCheck={false}
                 />

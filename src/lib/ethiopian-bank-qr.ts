@@ -12,12 +12,36 @@ export function usesWalletPhone(bank: Bank): boolean {
   return bank.accountType === "wallet_phone";
 }
 
+export function isYayaWallet(bank: Bank): boolean {
+  return bank.bic === "YAYAETAA";
+}
+
+export function isCbeBirrWallet(bank: Bank): boolean {
+  return bank.bic === "CBEBETAA";
+}
+
 export function getAccountInputMeta(bank: Bank): {
   label: string;
   placeholder: string;
   inputMode: "text" | "tel";
   hint?: string;
 } {
+  if (isYayaWallet(bank)) {
+    return {
+      label: "Wallet phone number",
+      placeholder: "+251949909116",
+      inputMode: "tel",
+      hint: "Registered mobile on Yaya (tag 28 uses nine digits without 251).",
+    };
+  }
+  if (isCbeBirrWallet(bank)) {
+    return {
+      label: "Wallet phone number",
+      placeholder: "+251911234567",
+      inputMode: "tel",
+      hint: "CBE Birr uses your registered mobile (2519xxxxxxxx in the QR).",
+    };
+  }
   if (usesWalletPhone(bank)) {
     return {
       label: "Wallet phone number",
@@ -80,16 +104,25 @@ export const BANKS: readonly Bank[] = [
   },
 ] as const;
 
-/** MCC used by CBE Birr / wallet QRs in the field (e.g. 4829). */
+/** MCC used by CBE Birr wallet QRs in the field (e.g. 4829). */
 export const WALLET_MERCHANT_CATEGORY = "4829";
+
+/** MCC on Yaya Wallet request-payment QRs (observed as 0000). */
+export const YAYA_MERCHANT_CATEGORY = "0000";
 
 export function tlv(tag: string, value: string): string {
   if (tag.length !== 2 || !/^\d{2}$/.test(tag)) {
     throw new Error(`Invalid TLV tag: ${JSON.stringify(tag)}`);
   }
   const length = value.length;
-  if (length > 99) {
+  if (length > 999) {
     throw new Error(`Value for tag ${tag} is too long (${length} characters)`);
+  }
+  if (length > 99) {
+    if (tag !== "62") {
+      throw new Error(`Value for tag ${tag} is too long (${length} characters)`);
+    }
+    return `${tag}${length.toString().padStart(3, "0")}${value}`;
   }
   return `${tag}${length.toString().padStart(2, "0")}${value}`;
 }
@@ -132,6 +165,56 @@ export function walletPhoneDigitsForTlv(raw: string): string {
   throw new Error(
     "Enter a valid Ethiopian mobile number for the wallet (e.g. +251911234567 or 0911234567).",
   );
+}
+
+/** Yaya tag 28-02 uses nine digits without the 251 prefix (e.g. 949909116). */
+export function yayaLocalPhoneDigits(raw: string): string {
+  const full = walletPhoneDigitsForTlv(raw);
+  const local = full.slice(3);
+  if (!/^9\d{8}$/.test(local)) {
+    throw new Error("Yaya Wallet phone must be a valid Ethiopian mobile number.");
+  }
+  return local;
+}
+
+/** Tag 62-02 phone line on Yaya QRs (e.g. +251-949909116). */
+export function formatYayaTag62Phone(localNineDigits: string): string {
+  return `+251-${localNineDigits}`;
+}
+
+export function normalizeYayaUsername(raw: string | undefined | null): string {
+  const trimmed = (raw ?? "").trim().replace(/^@/, "");
+  if (!trimmed) return "";
+  if (!/^[a-zA-Z0-9._-]{2,32}$/.test(trimmed)) {
+    throw new Error(
+      "Yaya username must be 2–32 characters (letters, numbers, ., _, -).",
+    );
+  }
+  return trimmed.toLowerCase();
+}
+
+function randomYayaReferenceToken(): string {
+  const bytes = new Uint8Array(6);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes)
+    .map((b) => b.toString(16).toUpperCase().padStart(2, "0"))
+    .join("");
+}
+
+function buildYayaAdditionalData(
+  localPhone: string,
+  username: string,
+  remark: string | null,
+): string {
+  const requestId = crypto.randomUUID();
+  const payLine = remark?.trim() || `Pay to YAYA:${username}`;
+  let additional = "";
+  additional += tlv("20", requestId);
+  additional += tlv("02", formatYayaTag62Phone(localPhone));
+  additional += tlv("04", `YAYA${username}`);
+  additional += tlv("07", randomYayaReferenceToken());
+  additional += tlv("08", payLine);
+  return additional;
 }
 
 function titleCaseCity(city: string): string {
@@ -219,8 +302,8 @@ function buildMerchantAccountBlock(
   return tlv("00", merchantGuid) + tlv("01", bank.bic) + tlv("02", account);
 }
 
-/** CBE Birr / Yaya-style wallet: sub-tag 00 and 02 both hold 2519xxxxxxxx digits. */
-function buildWalletMerchantAccountBlock(bank: Bank, phoneDigits: string): string {
+/** CBE Birr: sub-tag 00 and 02 both hold 2519xxxxxxxx digits. */
+function buildCbeBirrMerchantAccountBlock(bank: Bank, phoneDigits: string): string {
   return tlv("00", phoneDigits) + tlv("01", bank.bic) + tlv("02", phoneDigits);
 }
 
@@ -239,10 +322,11 @@ export async function buildPayload(input: BuildPayloadInput): Promise<string> {
     encoding = "ips",
   } = input;
 
-  const wallet = usesWalletPhone(bank);
+  const cbeWallet = isCbeBirrWallet(bank);
+  const yayaWallet = isYayaWallet(bank);
   const name = rawName.trim();
   let normalizedPhone = normalizePhone(phone);
-  const tillValue = wallet ? "" : (till ?? "").trim();
+  const tillValue = cbeWallet || yayaWallet ? "" : (till ?? "").trim();
   let merchantCategory = rawCategory.trim();
   const amount = formatTransactionAmount(rawAmount);
   const remark = normalizeRemark(rawRemark);
@@ -251,12 +335,16 @@ export async function buildPayload(input: BuildPayloadInput): Promise<string> {
   let city = rawCity.trim().toUpperCase();
   let merchantAccount: string;
   let includeTag80 = Boolean(remark);
+  let yayaAdditional: string | null = null;
 
-  if (wallet) {
+  if (cbeWallet || yayaWallet) {
     if (encoding === "legacy") {
       throw new Error(`Legacy QR format is not supported for ${bank.name}. Use IPS ET.`);
     }
     if (!account) throw new Error("Wallet phone number is required.");
+  }
+
+  if (cbeWallet) {
     const phoneDigits = walletPhoneDigitsForTlv(account);
     account = phoneDigits;
     city = titleCaseCity(rawCity);
@@ -264,7 +352,27 @@ export async function buildPayload(input: BuildPayloadInput): Promise<string> {
       !rawCategory.trim() || rawCategory.trim() === "5700"
         ? WALLET_MERCHANT_CATEGORY
         : merchantCategory;
-    merchantAccount = buildWalletMerchantAccountBlock(bank, phoneDigits);
+    merchantAccount = buildCbeBirrMerchantAccountBlock(bank, phoneDigits);
+    normalizedPhone = "";
+    includeTag80 = false;
+  } else if (yayaWallet) {
+    const localPhone = yayaLocalPhoneDigits(account);
+    account = localPhone;
+    city = rawCity.trim();
+    const username = normalizeYayaUsername(till);
+    if (!username) {
+      throw new Error("Yaya username is required (your handle in the Yaya app, e.g. mengstabkete).");
+    }
+    merchantCategory =
+      !rawCategory.trim() || rawCategory.trim() === "5700"
+        ? YAYA_MERCHANT_CATEGORY
+        : merchantCategory;
+    const merchantGuid =
+      normalizeMerchantGuid(rawMerchantGuid) ??
+      (await deriveMerchantGuid(bank.bic, localPhone));
+    merchantAccount =
+      tlv("00", merchantGuid) + tlv("01", bank.bic) + tlv("02", localPhone);
+    yayaAdditional = buildYayaAdditionalData(localPhone, username, remark);
     normalizedPhone = "";
     includeTag80 = false;
   } else {
@@ -292,10 +400,12 @@ export async function buildPayload(input: BuildPayloadInput): Promise<string> {
   }
 
   let additional = "";
-  if (wallet) {
+  if (cbeWallet) {
     additional += tlv("03", city);
     if (remark) additional += tlv("08", remark);
     additional += tlv("10", "");
+  } else if (yayaWallet) {
+    additional = yayaAdditional ?? "";
   } else {
     if (normalizedPhone) additional += tlv("02", normalizedPhone);
     if (tillValue) additional += tlv("07", tillValue);
