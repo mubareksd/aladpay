@@ -1,6 +1,8 @@
 import { Suspense } from "react";
 import { CheckoutFailureReturn } from "@/app/checkout/failure/checkout-return";
 
+export const instant = false;
+
 export default function CheckoutFailurePage() {
   return (
     <Suspense

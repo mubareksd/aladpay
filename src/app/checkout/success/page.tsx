@@ -1,6 +1,8 @@
 import { Suspense } from "react";
 import { CheckoutSuccessReturn } from "@/app/checkout/success/checkout-return";
 
+export const instant = false;
+
 export default function CheckoutSuccessPage() {
   return (
     <Suspense
