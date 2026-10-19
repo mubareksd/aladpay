@@ -26,13 +26,19 @@ export function AuthGate({ children }: { children: ReactNode }) {
             orders, team, and payments.
           </p>
           <div className="flex flex-col gap-2 sm:flex-row sm:justify-center">
-            <Link href="/login" className={btnPrimaryClass}>
+            <Link href="/login?returnTo=/app" className={btnPrimaryClass}>
               Sign in
             </Link>
-            <Link href="/register" className={btnPrimaryClass + " !bg-surface !text-foreground border border-border"}>
+            <Link
+              href="/register"
+              className={btnPrimaryClass + " !bg-surface !text-foreground border border-border"}
+            >
               Register company
             </Link>
           </div>
+          <Link href="/" className="text-xs text-muted hover:text-foreground">
+            ← Back to site
+          </Link>
         </div>
       </main>
     );

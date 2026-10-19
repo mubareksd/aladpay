@@ -71,7 +71,7 @@ export function AcceptInviteForm({ token }: { token: string }) {
               setLoading(false);
               return;
             }
-            router.replace("/");
+            router.replace("/app");
             router.refresh();
           })();
         }}

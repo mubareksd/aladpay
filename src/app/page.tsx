@@ -1,15 +1,22 @@
-import { Suspense } from "react";
-import { AuthGate } from "@/components/auth/auth-gate";
-import { BankQrGenerator } from "@/components/bank-qr-generator";
+import type { Metadata } from "next";
+import { MarketingHome } from "@/components/marketing/marketing-home";
+import { MarketingShell } from "@/components/marketing/marketing-shell";
 
-export default function Home() {
+export const metadata: Metadata = {
+  title: "Payment QR & restaurant POS for Ethiopia",
+  description:
+    "Create Ethiopian bank and wallet payment QRs, verify transfers, and run tables, kitchen, and guest ordering with AladPay.",
+  openGraph: {
+    title: "AladPay · Payment QR & POS for Ethiopia",
+    description:
+      "Bank QRs, payment verify, checkout, and restaurant POS with team access — built for ETB.",
+  },
+};
+
+export default function HomePage() {
   return (
-    <main className="min-h-full flex-1">
-      <Suspense fallback={<div className="p-6 text-sm text-muted">Loading…</div>}>
-        <AuthGate>
-          <BankQrGenerator />
-        </AuthGate>
-      </Suspense>
-    </main>
+    <MarketingShell>
+      <MarketingHome />
+    </MarketingShell>
   );
 }

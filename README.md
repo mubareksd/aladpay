@@ -22,7 +22,7 @@ Generate Ethiopian bank and wallet payment QR codes for receiving money.
 
 | Command | Description |
 |---------|-------------|
-| `npm run dev` | Local dev server |
+| `npm run dev` | Local dev server — marketing at `/`, product at `/app` |
 | `npm run build` | Production build (standalone output) |
 | `npm start` | Run production server |
 | `npm run check` | Lint, typecheck, tests, and build |

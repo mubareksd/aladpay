@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { AuthHeader } from "@/components/auth/auth-header";
 import type { AppSection } from "@/lib/app-sections";
 import { APP_NAV_ITEMS } from "@/lib/app-sections";
@@ -90,7 +91,9 @@ export function AppSidebarNav({ active, onChange }: AppNavigationProps) {
       className="no-print hidden lg:sticky lg:top-0 lg:flex lg:h-[100dvh] lg:w-56 lg:shrink-0 lg:flex-col lg:border-r lg:border-border lg:bg-surface lg:pt-[env(safe-area-inset-top,0)] xl:w-60"
     >
       <div className="border-b border-border px-5 py-5 space-y-2">
-        <p className="text-base font-semibold tracking-wide text-brand">AladPay</p>
+        <Link href="/" className="text-base font-semibold tracking-wide text-brand hover:opacity-90">
+          AladPay
+        </Link>
         <AuthHeader />
       </div>
       <ul className="flex flex-1 flex-col gap-0.5 p-3">

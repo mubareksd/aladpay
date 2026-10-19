@@ -11,7 +11,7 @@ export function AuthHeader() {
   if (!session) {
     return (
       <div className="flex flex-wrap items-center gap-2 text-xs">
-        <Link href="/login" className="text-brand hover:underline">
+        <Link href="/login?returnTo=/app" className="text-brand hover:underline">
           Sign in
         </Link>
         <Link href="/register" className="text-muted hover:text-foreground">

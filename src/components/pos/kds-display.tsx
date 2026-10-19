@@ -50,7 +50,7 @@ export function KdsDisplay() {
               {s.label}
             </button>
           ))}
-          <Link href="/?section=pos" className={btnSecondaryClass + " !min-h-9 text-xs !bg-[#18201e]"}>
+          <Link href="/app?section=pos" className={btnSecondaryClass + " !min-h-9 text-xs !bg-[#18201e]"}>
             Back to POS
           </Link>
         </div>

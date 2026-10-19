@@ -18,7 +18,7 @@ const geistMono = Geist_Mono({
 });
 
 export const viewport: Viewport = {
-  themeColor: "#146356",
+  themeColor: "#0b5f56",
   width: "device-width",
   initialScale: 1,
 };
@@ -29,7 +29,8 @@ export const metadata: Metadata = {
     default: "AladPay · Bank QR",
     template: "%s · AladPay",
   },
-  description: "Create static payment QR codes for Ethiopian banks.",
+  description:
+    "Payment QR codes, verify, and restaurant POS for Ethiopian banks and wallets (ETB).",
   applicationName: "AladPay",
   openGraph: {
     type: "website",
@@ -37,7 +38,8 @@ export const metadata: Metadata = {
     url: siteUrl,
     siteName: "AladPay",
     title: "AladPay · Bank QR",
-    description: "Create static payment QR codes for Ethiopian banks.",
+    description:
+      "Payment QR codes, verify, and restaurant POS for Ethiopian banks and wallets (ETB).",
   },
   robots: {
     index: true,

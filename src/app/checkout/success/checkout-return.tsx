@@ -28,11 +28,11 @@ export function CheckoutSuccessReturn() {
         {orderUpdated ? " Your table order is marked paid." : null}
       </p>
       <div className="mt-6 flex flex-wrap gap-4 text-sm">
-        <Link href="/?section=pos" className="font-medium text-brand hover:underline">
+        <Link href="/app?section=pos" className="font-medium text-brand hover:underline">
           Back to orders
         </Link>
         <Link href="/" className="font-medium text-muted hover:text-foreground">
-          Home
+          Marketing site
         </Link>
       </div>
     </main>
