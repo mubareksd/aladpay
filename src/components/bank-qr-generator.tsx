@@ -4,12 +4,19 @@ import QRCode from "qrcode";
 import { useCallback, useMemo, useState } from "react";
 import { BankLogo } from "@/components/bank-logo";
 import { ChevronDown } from "@/components/chevron-down";
+import { SavedAccountsPanel } from "@/components/saved-accounts-panel";
+import { useSavedAccounts } from "@/hooks/use-saved-accounts";
 import {
   BANKS,
   buildPayload,
   formatTransactionAmount,
   type Bank,
 } from "@/lib/ethiopian-bank-qr";
+import {
+  formFieldsToSavedAccount,
+  savedAccountToFormFields,
+  type SavedAccount,
+} from "@/lib/saved-accounts";
 
 const fieldClass =
   "w-full rounded border border-border bg-surface px-3 py-2.5 text-sm text-foreground outline-none transition-colors focus:border-brand focus:ring-1 focus:ring-brand";
@@ -39,7 +46,11 @@ const defaultForm: FormState = {
 };
 
 export function BankQrGenerator() {
+  const { accounts, upsert, remove } = useSavedAccounts();
   const [form, setForm] = useState<FormState>(defaultForm);
+  const [activeSavedId, setActiveSavedId] = useState<string | null>(null);
+  const [saveLabel, setSaveLabel] = useState("");
+  const [quickAmount, setQuickAmount] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [payload, setPayload] = useState<string | null>(null);
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
@@ -77,51 +88,126 @@ export function BankQrGenerator() {
     );
   }, [bankFilter]);
 
+  const clearPreview = useCallback(() => {
+    setPayload(null);
+    setQrDataUrl(null);
+    setSelectedBank(null);
+    setAmountInQr(null);
+  }, []);
+
   const updateField = useCallback((key: keyof FormState, value: string) => {
     setForm((prev) => ({ ...prev, [key]: value }));
     setError(null);
   }, []);
 
+  const runGenerate = useCallback(
+    async (fields: FormState, amountValue: string) => {
+      setError(null);
+      clearPreview();
+
+      const bank = BANKS.find((b) => b.bic === fields.bankBic);
+      if (!bank) {
+        setError("Pick a bank first.");
+        return;
+      }
+
+      try {
+        const nextPayload = await buildPayload({
+          bank,
+          account: fields.account,
+          name: fields.name,
+          phone: fields.phone || undefined,
+          till: fields.till || undefined,
+          city: fields.city,
+          amount: amountValue.trim() || undefined,
+          encoding: fields.encoding,
+          merchantGuid: fields.merchantGuid || undefined,
+        });
+        const dataUrl = await QRCode.toDataURL(nextPayload, {
+          errorCorrectionLevel: "M",
+          margin: 4,
+          width: 300,
+          color: { dark: "#000000", light: "#ffffff" },
+        });
+        setPayload(nextPayload);
+        setQrDataUrl(dataUrl);
+        setSelectedBank(bank);
+        const formattedAmount = formatTransactionAmount(amountValue || undefined);
+        setAmountInQr(formattedAmount ? `${formattedAmount} ETB` : null);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Could not build the QR.");
+      }
+    },
+    [clearPreview],
+  );
+
   const generate = useCallback(async () => {
-    setError(null);
-    setPayload(null);
-    setQrDataUrl(null);
-    setSelectedBank(null);
-    setAmountInQr(null);
+    await runGenerate(form, form.amount);
+  }, [form, runGenerate]);
 
-    const bank = BANKS.find((b) => b.bic === form.bankBic);
-    if (!bank) {
-      setError("Pick a bank first.");
-      return;
-    }
+  const generateOpenAmount = useCallback(async () => {
+    const fields = { ...form, amount: "" };
+    setForm(fields);
+    await runGenerate(fields, "");
+  }, [form, runGenerate]);
 
+  const selectSavedAccount = useCallback(
+    (account: SavedAccount) => {
+      setActiveSavedId(account.id);
+      setSaveLabel(account.label);
+      setForm({ ...savedAccountToFormFields(account), amount: "" });
+      clearPreview();
+      setError(null);
+    },
+    [clearPreview],
+  );
+
+  const saveCurrentAccount = useCallback(() => {
     try {
-      const nextPayload = await buildPayload({
-        bank,
-        account: form.account,
-        name: form.name,
-        phone: form.phone || undefined,
-        till: form.till || undefined,
-        city: form.city,
-        amount: form.amount || undefined,
-        encoding: form.encoding,
-        merchantGuid: form.merchantGuid || undefined,
-      });
-      const dataUrl = await QRCode.toDataURL(nextPayload, {
-        errorCorrectionLevel: "M",
-        margin: 4,
-        width: 300,
-        color: { dark: "#000000", light: "#ffffff" },
-      });
-      setPayload(nextPayload);
-      setQrDataUrl(dataUrl);
-      setSelectedBank(bank);
-      const formattedAmount = formatTransactionAmount(form.amount || undefined);
-      setAmountInQr(formattedAmount ? `${formattedAmount} ETB` : null);
+      const id = activeSavedId ?? crypto.randomUUID();
+      const saved = formFieldsToSavedAccount(
+        {
+          bankBic: form.bankBic,
+          account: form.account,
+          name: form.name,
+          phone: form.phone,
+          till: form.till,
+          city: form.city,
+          encoding: form.encoding,
+          merchantGuid: form.merchantGuid,
+        },
+        id,
+        saveLabel || undefined,
+      );
+      upsert(saved);
+      setActiveSavedId(id);
+      setSaveLabel(saved.label);
+      setError(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not build the QR.");
+      setError(e instanceof Error ? e.message : "Could not save account.");
     }
-  }, [form]);
+  }, [activeSavedId, form, saveLabel, upsert]);
+
+  const quickQrFromSaved = useCallback(
+    async (account: SavedAccount, withAmount: boolean) => {
+      const amount = withAmount ? quickAmount : "";
+      if (withAmount && !amount.trim()) {
+        setError('Set "Amount for QR with amount shortcuts" under saved accounts.');
+        return;
+      }
+      const fields: FormState = { ...savedAccountToFormFields(account), amount };
+      setActiveSavedId(account.id);
+      setSaveLabel(account.label);
+      setForm(fields);
+      await runGenerate(fields, amount);
+    },
+    [quickAmount, runGenerate],
+  );
+
+  const clearSavedSelection = useCallback(() => {
+    setActiveSavedId(null);
+    setSaveLabel("");
+  }, []);
 
   const downloadPng = useCallback(() => {
     if (!qrDataUrl) return;
@@ -160,7 +246,26 @@ export function BankQrGenerator() {
           </p>
         </header>
 
-        <div className="mt-8 grid gap-6 lg:grid-cols-[minmax(0,1.15fr)_minmax(260px,360px)] lg:gap-8">
+        <div className="mt-8 space-y-6">
+          <SavedAccountsPanel
+            accounts={accounts}
+            activeId={activeSavedId}
+            saveLabel={saveLabel}
+            onSaveLabelChange={setSaveLabel}
+            onSelect={selectSavedAccount}
+            onClearSelection={clearSavedSelection}
+            onSave={saveCurrentAccount}
+            onRemove={(id) => {
+              remove(id);
+              if (activeSavedId === id) clearSavedSelection();
+            }}
+            onQuickQr={(account, withAmount) => void quickQrFromSaved(account, withAmount)}
+            quickAmount={quickAmount}
+            onQuickAmountChange={setQuickAmount}
+          />
+        </div>
+
+        <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1.15fr)_minmax(260px,360px)] lg:gap-8">
           <form
             className="space-y-4 border border-border bg-surface p-5 sm:p-6"
             onSubmit={(e) => {
@@ -372,12 +477,21 @@ export function BankQrGenerator() {
               </p>
             ) : null}
 
-            <button
-              type="submit"
-              className="w-full rounded bg-brand px-4 py-2.5 text-sm font-medium text-white hover:bg-brand-hover"
-            >
-              Create QR
-            </button>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <button
+                type="button"
+                onClick={() => void generateOpenAmount()}
+                className="w-full rounded border border-border bg-background px-4 py-2.5 text-sm font-medium text-foreground hover:bg-brand-soft"
+              >
+                Create QR, any amount
+              </button>
+              <button
+                type="submit"
+                className="w-full rounded bg-brand px-4 py-2.5 text-sm font-medium text-white hover:bg-brand-hover"
+              >
+                Create QR{form.amount.trim() ? " with amount" : ""}
+              </button>
+            </div>
           </form>
 
           <aside className="space-y-4 lg:sticky lg:top-6 lg:self-start">
