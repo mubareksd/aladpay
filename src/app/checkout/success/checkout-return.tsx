@@ -2,12 +2,21 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
+import { useEffect } from "react";
+import { markOrderPaidByNonce } from "@/lib/pos/storage";
 
 export function CheckoutSuccessReturn() {
   const params = useSearchParams();
   const sessionId = params.get("sessionId") ?? params.get("order_id");
   const amount = params.get("amount");
   const currency = params.get("currency") ?? "ETB";
+  const status = params.get("status");
+  const nonce = params.get("nonce");
+  const orderUpdated = status === "paid" && Boolean(nonce);
+
+  useEffect(() => {
+    if (status === "paid" && nonce) markOrderPaidByNonce(nonce);
+  }, [status, nonce]);
 
   return (
     <main className="mx-auto max-w-lg px-4 py-12">
@@ -16,10 +25,16 @@ export function CheckoutSuccessReturn() {
         Your checkout reported a successful payment
         {sessionId ? ` for session ${sessionId}` : ""}.
         {amount ? ` Amount: ${amount} ${currency}.` : null}
+        {orderUpdated ? " Your table order is marked paid." : null}
       </p>
-      <Link href="/" className="mt-6 inline-block text-sm font-medium text-brand hover:underline">
-        Back to AladPay
-      </Link>
+      <div className="mt-6 flex flex-wrap gap-4 text-sm">
+        <Link href="/?section=pos" className="font-medium text-brand hover:underline">
+          Back to orders
+        </Link>
+        <Link href="/" className="font-medium text-muted hover:text-foreground">
+          Home
+        </Link>
+      </div>
     </main>
   );
 }

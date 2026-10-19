@@ -8,6 +8,7 @@ Generate Ethiopian bank and wallet payment QR codes for receiving money.
 - Optional fixed amount or open amount
 - Saved accounts in `localStorage` (browser only)
 - Import payee details from a QR photo
+- **Tables, menu, and orders** (browser storage) with checkout payment per order
 - Incoming payment verification and optional hosted checkout (server-configured)
 - Export / import saved account backups
 

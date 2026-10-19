@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { PosPanel } from "@/components/pos/pos-panel";
 import { AladVerifyPanel } from "@/components/alad-verify-panel";
 import { AppShell } from "@/components/app-shell";
 import { bicToAladBank } from "@/lib/alad/bank-codes";
@@ -51,7 +53,21 @@ export function BankQrGenerator() {
   const [quickAmount, setQuickAmount] = useState("");
   const [bankPickerOpen, setBankPickerOpen] = useState(false);
   const [bankPickerQuery, setBankPickerQuery] = useState("");
-  const [activeSection, setActiveSection] = useState<AppSection>("create");
+  const searchParams = useSearchParams();
+  const [activeSection, setActiveSection] = useState<AppSection>(() => {
+    const section = searchParams.get("section");
+    if (
+      section === "pos" ||
+      section === "create" ||
+      section === "saved" ||
+      section === "verify" ||
+      section === "decoder" ||
+      section === "banks"
+    ) {
+      return section;
+    }
+    return "create";
+  });
   const [bankFilter, setBankFilter] = useState("");
   const [touched, setTouched] = useState<Partial<Record<ValidatedFormField, boolean>>>({});
 
@@ -208,6 +224,12 @@ export function BankQrGenerator() {
               onMergeImport={mergeImported}
               onReplaceImport={replaceImported}
             />
+          </div>
+        ) : null}
+
+        {activeSection === "pos" ? (
+          <div className="no-print mt-6 md:mt-8">
+            <PosPanel />
           </div>
         ) : null}
 

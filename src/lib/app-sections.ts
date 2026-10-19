@@ -1,4 +1,4 @@
-export type AppSection = "create" | "saved" | "verify" | "decoder" | "banks";
+export type AppSection = "create" | "saved" | "pos" | "verify" | "decoder" | "banks";
 
 export type AppNavItem = {
   id: AppSection;
@@ -19,6 +19,12 @@ export const APP_NAV_ITEMS: readonly AppNavItem[] = [
     label: "Saved accounts",
     shortLabel: "Saved",
     description: "Store accounts and generate QRs with one tap.",
+  },
+  {
+    id: "pos",
+    label: "Tables & orders",
+    shortLabel: "Orders",
+    description: "Manage tables, menu, and orders — accept checkout payment when a bill is ready.",
   },
   {
     id: "verify",
