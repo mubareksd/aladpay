@@ -1,4 +1,3 @@
-import { normalizeIpsBankAccount } from "@/lib/bank-account-normalize";
 import { BANKS, formatTransactionAmount, isCbeBirrWallet, isYayaWallet } from "@/lib/ethiopian-bank-qr";
 import type { PaymentQrFormState } from "@/lib/payment-form-state";
 import {
@@ -32,11 +31,6 @@ export function getFormFieldError(
         if (isCbeBirrWallet(bank) || isYayaWallet(bank)) {
           walletPhoneDigitsForTlv(form.account);
           if (isYayaWallet(bank)) yayaLocalPhoneDigits(form.account);
-        } else if (bank.bic === "AWINETAA") {
-          const normalized = normalizeIpsBankAccount(bank, form.account);
-          if (normalized.length !== 13) {
-            return "Awash account should be 13 digits (remove a leading 01 prefix if you have 15 digits).";
-          }
         }
         return null;
       case "name":

@@ -1,7 +1,7 @@
 {
   "ABYSETAA": "If scans fail, try legacy format or import from a working QR photo.",
   "DASHETAA": "Use the national interoperable standard when possible.",
-  "AWINETAA": "Use IPS with your 13-digit account. If scans fail, import a working Awash QR or add the payment identifier from Awash.",
+  "AWINETAA": "Use the national interoperable standard. If scans fail, import a working Awash QR or add the payment identifier from your bank.",
   "CBEBETAA": "Use your registered wallet phone number.",
   "YAYAETAA": "If payment fails, import from a working QR or try compatibility mode."
 }

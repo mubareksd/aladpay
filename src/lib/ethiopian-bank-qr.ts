@@ -44,14 +44,6 @@ export function getAccountInputMeta(bank: Bank): {
       hint: "Use the mobile number registered on your Yaya wallet.",
     };
   }
-  if (bank.bic === "AWINETAA") {
-    return {
-      label: "Account number",
-      placeholder: "",
-      inputMode: "text",
-      hint: "Use the 13-digit Awash account. If your statement shows 15 digits starting with 01, omit that prefix.",
-    };
-  }
   if (isCbeBirrWallet(bank)) {
     return {
       label: "Wallet phone number",
