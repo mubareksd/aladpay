@@ -28,6 +28,13 @@ function NavIcon({ section, active }: { section: AppSection; active: boolean }) 
           <path d="M12 17.5 5 21V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16l-7-3.5z" />
         </svg>
       );
+    case "verify":
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden {...common}>
+          <path d="M9 12.5 11 14.5 15.5 10" />
+          <path d="M12 3 4 7v6c0 5 3.5 8.5 8 9.5 4.5-1 8-4.5 8-9.5V7l-8-4z" />
+        </svg>
+      );
     case "decoder":
       return (
         <svg viewBox="0 0 24 24" aria-hidden {...common}>

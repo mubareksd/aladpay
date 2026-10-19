@@ -1,4 +1,4 @@
-export type AppSection = "create" | "saved" | "decoder" | "banks";
+export type AppSection = "create" | "saved" | "verify" | "decoder" | "banks";
 
 export type AppNavItem = {
   id: AppSection;
@@ -19,6 +19,13 @@ export const APP_NAV_ITEMS: readonly AppNavItem[] = [
     label: "Saved accounts",
     shortLabel: "Saved",
     description: "Store accounts and generate QRs with one tap.",
+  },
+  {
+    id: "verify",
+    label: "Verify payment",
+    shortLabel: "Verify",
+    description:
+      "Confirm a customer transfer with Alad using a receipt URL or reference, optional settlement and amount checks.",
   },
   {
     id: "decoder",

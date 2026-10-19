@@ -12,6 +12,8 @@ Generate Ethiopian bank and wallet payment QR codes from EMV-style TLV payloads 
 - **Favorite banks** in the picker; **live preview** with stale-request protection
 - **Yaya tag 62 compatibility** mode when the Yaya app rejects standard encoding
 - Export / import saved account backups (merge or replace)
+- **Alad payment verification** — server-side proxy to [Alad](https://alad.et) `POST /api/v2/verify` (receipt URL or reference + bank, optional settlement and amount match)
+- **Alad checkout** — create hosted payment sessions via `POST /api/v1/checkout/session`
 
 ## Requirements
 
