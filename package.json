@@ -9,7 +9,8 @@
     "lint": "eslint src",
     "typecheck": "tsc --noEmit",
     "check": "npm run lint && npm run typecheck && npm run build",
-    "sync-logos": "node scripts/sync-bank-logos.mjs"
+    "sync-logos": "node scripts/sync-bank-logos.mjs",
+    "sample-payloads": "tsx scripts/sample-payloads.mjs"
   },
   "engines": {
     "node": ">=20"

@@ -91,6 +91,9 @@ export function formatTransactionAmount(raw: string | undefined | null): string 
   return formatted;
 }
 
+/** National IPS ET (NBE) vs older single-bank template some apps still accept. */
+export type QrEncoding = "ips" | "legacy";
+
 export type BuildPayloadInput = {
   bank: Bank;
   account: string;
@@ -100,9 +103,43 @@ export type BuildPayloadInput = {
   city?: string;
   merchantCategory?: string;
   amount?: string | null;
+  /** 32 hex chars (UUID without hyphens). Generated from bank + account when omitted. */
+  merchantGuid?: string | null;
+  encoding?: QrEncoding;
 };
 
-export function buildPayload(input: BuildPayloadInput): string {
+/** 32 lowercase hex characters for IPS ET tag 28 sub-tag 00. */
+export async function deriveMerchantGuid(bic: string, account: string): Promise<string> {
+  const data = new TextEncoder().encode(`${bic}:${account.trim()}`);
+  const digest = await crypto.subtle.digest("SHA-256", data);
+  return Array.from(new Uint8Array(digest))
+    .slice(0, 16)
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+export function normalizeMerchantGuid(raw: string | undefined | null): string | null {
+  if (!raw?.trim()) return null;
+  const guid = raw.trim().replace(/-/g, "").toLowerCase();
+  if (!/^[0-9a-f]{32}$/.test(guid)) {
+    throw new Error("Merchant GUID must be 32 hex characters (UUID without hyphens).");
+  }
+  return guid;
+}
+
+function buildMerchantAccountBlock(
+  bank: Bank,
+  account: string,
+  encoding: QrEncoding,
+  merchantGuid: string,
+): string {
+  if (encoding === "legacy") {
+    return tlv("00", bank.bic + "0002246") + tlv("01", bank.bic) + tlv("02", account);
+  }
+  return tlv("00", merchantGuid) + tlv("01", bank.bic) + tlv("02", account);
+}
+
+export async function buildPayload(input: BuildPayloadInput): Promise<string> {
   const {
     bank,
     account: rawAccount,
@@ -112,6 +149,8 @@ export function buildPayload(input: BuildPayloadInput): string {
     city: rawCity = "ADDIS ABABA",
     merchantCategory: rawCategory = "5700",
     amount: rawAmount,
+    merchantGuid: rawMerchantGuid,
+    encoding = "ips",
   } = input;
 
   const account = rawAccount.trim();
@@ -130,17 +169,31 @@ export function buildPayload(input: BuildPayloadInput): string {
   if (!/^\d{4}$/.test(merchantCategory)) {
     throw new Error("Merchant category must be exactly four digits.");
   }
+  if (account.length > 24) {
+    throw new Error("Account number must be at most 24 characters for IPS ET.");
+  }
 
-  const merchantAccount =
-    tlv("00", bank.bic + "0002246") + tlv("01", bank.bic) + tlv("02", account);
+  const merchantGuid =
+    encoding === "ips"
+      ? normalizeMerchantGuid(rawMerchantGuid) ?? (await deriveMerchantGuid(bank.bic, account))
+      : "";
+
+  const merchantAccount = buildMerchantAccountBlock(
+    bank,
+    account,
+    encoding,
+    merchantGuid,
+  );
 
   let additional = "";
   if (normalizedPhone) additional += tlv("02", normalizedPhone);
   if (tillValue) additional += tlv("07", tillValue);
 
+  const pointOfInitiation = amount ? "12" : "11";
+
   let payload =
     tlv("00", "01") +
-    tlv("01", "11") +
+    tlv("01", pointOfInitiation) +
     tlv("28", merchantAccount) +
     tlv("52", merchantCategory) +
     tlv("53", "230") +

@@ -22,6 +22,8 @@ type FormState = {
   phone: string;
   till: string;
   city: string;
+  encoding: "ips" | "legacy";
+  merchantGuid: string;
 };
 
 const defaultForm: FormState = {
@@ -32,6 +34,8 @@ const defaultForm: FormState = {
   phone: "",
   till: "",
   city: "ADDIS ABABA",
+  encoding: "ips",
+  merchantGuid: "",
 };
 
 export function BankQrGenerator() {
@@ -92,7 +96,7 @@ export function BankQrGenerator() {
     }
 
     try {
-      const nextPayload = buildPayload({
+      const nextPayload = await buildPayload({
         bank,
         account: form.account,
         name: form.name,
@@ -100,12 +104,14 @@ export function BankQrGenerator() {
         till: form.till || undefined,
         city: form.city,
         amount: form.amount || undefined,
+        encoding: form.encoding,
+        merchantGuid: form.merchantGuid || undefined,
       });
       const dataUrl = await QRCode.toDataURL(nextPayload, {
         errorCorrectionLevel: "M",
         margin: 4,
         width: 300,
-        color: { dark: "#1a1814", light: "#fffcf7" },
+        color: { dark: "#000000", light: "#ffffff" },
       });
       setPayload(nextPayload);
       setQrDataUrl(dataUrl);
@@ -319,6 +325,43 @@ export function BankQrGenerator() {
                 className={fieldClass}
               />
             </div>
+
+            <div>
+              <label htmlFor="encoding" className="mb-1 block text-xs font-medium text-muted">
+                QR standard
+              </label>
+              <select
+                id="encoding"
+                value={form.encoding}
+                onChange={(e) =>
+                  updateField("encoding", e.target.value as FormState["encoding"])
+                }
+                className={fieldClass}
+              >
+                <option value="ips">IPS ET (national interoperable)</option>
+                <option value="legacy">Legacy (BIC + 0002246 prefix)</option>
+              </select>
+              <p className="mt-1 text-[11px] leading-relaxed text-muted">
+                Use IPS ET for Dashen, Awash, and other banks on the national QR network. Try
+                legacy only if your bank gave you that older layout (some Abyssinia QRs).
+              </p>
+            </div>
+
+            {form.encoding === "ips" ? (
+              <div>
+                <label htmlFor="merchantGuid" className="mb-1 block text-xs font-medium text-muted">
+                  Merchant GUID (optional)
+                </label>
+                <input
+                  id="merchantGuid"
+                  value={form.merchantGuid}
+                  onChange={(e) => updateField("merchantGuid", e.target.value)}
+                  placeholder="32 hex chars from your bank, or leave blank"
+                  className={`${fieldClass} font-mono text-xs`}
+                  spellCheck={false}
+                />
+              </div>
+            ) : null}
 
             {error ? (
               <p
