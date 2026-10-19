@@ -1,30 +1,37 @@
 "use client";
 
 import { useCallback, useSyncExternalStore } from "react";
+import { defaultPosState } from "@/lib/pos/defaults";
 import {
   addLineToOrder,
   createOrder,
   getPosClientSnapshot,
   getPosServerSnapshot,
+  importGuestOrder,
+  importPosBackup,
   removeMenuItem,
   removeTable,
+  replacePosState,
   setOrderStatus,
   setPaymentSettings,
   setTableStatus,
   subscribePos,
   updateOrder,
+  updatePos,
   upsertMenuItem,
   upsertTable,
-  updatePos,
 } from "@/lib/pos/storage";
-import { defaultPosState } from "@/lib/pos/defaults";
 import type { MenuItem, PosPaymentSettings, PosTable, TableStatus } from "@/lib/pos/types";
+import type { ServerGuestOrder } from "@/lib/pos/types";
 
 export function usePos() {
   const state = useSyncExternalStore(subscribePos, getPosClientSnapshot, getPosServerSnapshot);
 
   return {
     state,
+    setVenueName: useCallback((venueName: string) => {
+      updatePos((s) => ({ ...s, venueName }));
+    }, []),
     upsertTable: useCallback((table: PosTable) => upsertTable(table), []),
     removeTable: useCallback((id: string) => removeTable(id), []),
     setTableStatus: useCallback((id: string, status: TableStatus) => setTableStatus(id, status), []),
@@ -46,6 +53,8 @@ export function usePos() {
       [],
     ),
     setPaymentSettings: useCallback((payment: PosPaymentSettings) => setPaymentSettings(payment), []),
-    resetPos: useCallback(() => updatePos(() => defaultPosState()), []),
+    importGuestOrder: useCallback((entry: ServerGuestOrder) => importGuestOrder(entry), []),
+    importBackup: useCallback((raw: string) => replacePosState(importPosBackup(raw)), []),
+    resetPos: useCallback(() => replacePosState(defaultPosState()), []),
   };
 }

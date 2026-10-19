@@ -1,5 +1,6 @@
 import { defaultPosState } from "@/lib/pos/defaults";
 import { orderTotal } from "@/lib/pos/order-math";
+import { isActiveOrderStatus } from "@/lib/pos/order-status";
 import type {
   MenuItem,
   OrderLine,
@@ -8,6 +9,7 @@ import type {
   PosPaymentSettings,
   PosState,
   PosTable,
+  ServerGuestOrder,
   TableStatus,
 } from "@/lib/pos/types";
 
@@ -32,6 +34,15 @@ function parsePosState(raw: string | null): PosState {
     return {
       ...defaultPosState(),
       ...data,
+      venueName: typeof data.venueName === "string" ? data.venueName : defaultPosState().venueName,
+      menuItems: data.menuItems.map((m) => ({
+        ...m,
+        station: m.station ?? "general",
+      })),
+      orders: data.orders.map((o) => ({
+        ...o,
+        source: o.source ?? "staff",
+      })),
       payment: { ...defaultPosState().payment, ...data.payment },
     };
   } catch {
@@ -123,6 +134,7 @@ export function createOrder(table: PosTable | null): PosOrder {
     tableId: table?.id ?? null,
     tableLabel: table?.label ?? "Takeaway",
     status: "open",
+    source: "staff",
     lines: [],
     note: "",
     createdAt: Date.now(),
@@ -169,6 +181,7 @@ export function addLineToOrder(orderId: string, item: MenuItem, quantity = 1): v
             name: item.name,
             unitPrice: item.price,
             quantity,
+            station: item.station,
           },
         ];
       }
@@ -188,7 +201,7 @@ export function setOrderStatus(orderId: string, status: OrderStatus): void {
           (o) =>
             o.id !== orderId &&
             o.tableId === order.tableId &&
-            (o.status === "open" || o.status === "awaiting_payment"),
+            isActiveOrderStatus(o.status),
         );
         if (!otherOpen) {
           tables = tables.map((t) =>
@@ -228,7 +241,53 @@ export function setPaymentSettings(payment: PosPaymentSettings): void {
 }
 
 export function openOrders(state: PosState): PosOrder[] {
-  return state.orders.filter((o) => o.status === "open" || o.status === "awaiting_payment");
+  return state.orders.filter((o) => isActiveOrderStatus(o.status));
+}
+
+export function kitchenOrders(state: PosState): PosOrder[] {
+  return state.orders.filter((o) => o.status === "kitchen" || o.status === "ready");
+}
+
+export function importGuestOrder(entry: ServerGuestOrder): PosOrder {
+  const table = syncClientSnapshotFromStorage().tables.find((t) => t.id === entry.tableId);
+  const order: PosOrder = {
+    id: entry.id,
+    tableId: entry.tableId,
+    tableLabel: entry.tableLabel,
+    status: "kitchen",
+    source: "guest",
+    note: entry.note,
+    createdAt: entry.createdAt,
+    updatedAt: Date.now(),
+    lines: entry.lines.map((line) => ({
+      id: crypto.randomUUID(),
+      menuItemId: line.menuItemId,
+      name: line.name,
+      unitPrice: line.unitPrice,
+      quantity: line.quantity,
+    })),
+  };
+  updatePos((s) => {
+    let tables = s.tables;
+    if (table && table.status === "available") {
+      tables = tables.map((t) =>
+        t.id === table.id ? { ...t, status: "occupied" as const, updatedAt: Date.now() } : t,
+      );
+    }
+    if (s.orders.some((o) => o.id === order.id)) return s;
+    return { ...s, tables, orders: [order, ...s.orders] };
+  });
+  return order;
+}
+
+export function exportPosBackup(state: PosState): string {
+  return JSON.stringify({ version: 1, exportedAt: new Date().toISOString(), pos: state }, null, 2);
+}
+
+export function importPosBackup(raw: string): PosState {
+  const data = JSON.parse(raw) as { pos?: PosState };
+  if (!data.pos || !isPosState(data.pos)) throw new Error("Invalid POS backup.");
+  return parsePosState(JSON.stringify(data.pos));
 }
 
 export function orderTotalEtb(order: PosOrder): number {

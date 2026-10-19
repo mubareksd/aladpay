@@ -23,17 +23,18 @@ export function seedTables(): PosTable[] {
 
 export function seedMenu(): MenuItem[] {
   const items: Omit<MenuItem, "id" | "updatedAt">[] = [
-    { name: "Macchiato", price: 80, category: "Drinks", available: true },
-    { name: "Spris", price: 90, category: "Drinks", available: true },
-    { name: "Burger", price: 350, category: "Food", available: true },
-    { name: "Firfir", price: 220, category: "Food", available: true },
-    { name: "Water 1L", price: 40, category: "Drinks", available: true },
+    { name: "Macchiato", price: 80, category: "Drinks", station: "bar", available: true },
+    { name: "Spris", price: 90, category: "Drinks", station: "bar", available: true },
+    { name: "Burger", price: 350, category: "Food", station: "kitchen", available: true },
+    { name: "Firfir", price: 220, category: "Food", station: "kitchen", available: true },
+    { name: "Water 1L", price: 40, category: "Drinks", station: "bar", available: true },
   ];
   return items.map((item) => ({ ...item, id: crypto.randomUUID(), updatedAt: now() }));
 }
 
 export function defaultPosState(): PosState {
   return {
+    venueName: "My restaurant",
     tables: seedTables(),
     menuItems: seedMenu(),
     orders: [],

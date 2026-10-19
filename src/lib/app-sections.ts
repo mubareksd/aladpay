@@ -24,7 +24,7 @@ export const APP_NAV_ITEMS: readonly AppNavItem[] = [
     id: "pos",
     label: "Tables & orders",
     shortLabel: "Orders",
-    description: "Manage tables, menu, and orders — accept checkout payment when a bill is ready.",
+    description: "Tables, kitchen, guest QR ordering, daily reports, and checkout when the bill is ready.",
   },
   {
     id: "verify",

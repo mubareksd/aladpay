@@ -45,3 +45,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# POS guest menu / inbox file store (or POS_DATA_DIR)
+.data/

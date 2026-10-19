@@ -8,7 +8,9 @@ Generate Ethiopian bank and wallet payment QR codes for receiving money.
 - Optional fixed amount or open amount
 - Saved accounts in `localStorage` (browser only)
 - Import payee details from a QR photo
-- **Tables, menu, and orders** (browser storage) with checkout payment per order
+- **Restaurant POS** — tables, bilingual menu, kitchen queue, daily reports, POS backup (browser `localStorage`)
+- **Guest QR ordering** — publish menu to the server, table QR links to `/guest/{tableId}`; staff sync imports orders into the kitchen queue
+- Checkout payment per order when the bill is ready
 - Incoming payment verification and optional hosted checkout (server-configured)
 - Export / import saved account backups
 
@@ -32,6 +34,7 @@ Generate Ethiopian bank and wallet payment QR codes for receiving money.
 
 - `NEXT_PUBLIC_SITE_URL` — public site URL (metadata and checkout redirects)
 - `ALAD_API_KEY` — server-only; enables Verify and checkout (see `.env.example`)
+- `POS_DATA_DIR` — optional; directory for guest menu and inbox JSON (default `.data/` in the app root). Mount a volume in Docker so guest orders survive restarts.
 
 ## Docker
 
