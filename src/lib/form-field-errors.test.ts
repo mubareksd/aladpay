@@ -12,7 +12,7 @@ describe("getFormFieldError", () => {
       ...defaultPaymentQrForm,
       merchantGuid: "not-hex",
     };
-    expect(getFormFieldError(form, "merchantGuid")).toMatch(/32 hex/);
+    expect(getFormFieldError(form, "merchantGuid")).toMatch(/identifier/i);
   });
 
   it("accepts empty merchant GUID", () => {

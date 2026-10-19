@@ -41,7 +41,7 @@ export function getAccountInputMeta(bank: Bank): {
       label: "Wallet phone number",
       placeholder: "+251949909116",
       inputMode: "tel",
-      hint: "Registered mobile on Yaya (tag 28 uses nine digits without 251).",
+      hint: "Use the mobile number registered on your Yaya wallet.",
     };
   }
   if (isCbeBirrWallet(bank)) {
@@ -49,7 +49,7 @@ export function getAccountInputMeta(bank: Bank): {
       label: "Wallet phone number",
       placeholder: "+251911234567",
       inputMode: "tel",
-      hint: "CBE Birr uses your registered mobile (2519xxxxxxxx in the QR).",
+      hint: "Use the mobile number registered on CBE Birr.",
     };
   }
   if (usesWalletPhone(bank)) {

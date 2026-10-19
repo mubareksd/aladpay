@@ -142,15 +142,6 @@ export function BankQrGenerator() {
     [form.remark, qr, quickAmount],
   );
 
-  const copyPayload = useCallback(async () => {
-    if (!qr.payload) return;
-    try {
-      await navigator.clipboard.writeText(qr.payload);
-    } catch {
-      qr.setError("Clipboard access failed.");
-    }
-  }, [qr]);
-
   const downloadPng = useCallback(() => {
     if (!qr.qrDataUrl) return;
     const link = document.createElement("a");
@@ -234,7 +225,6 @@ export function BankQrGenerator() {
             <PayloadDecoderPanel
               onApplyHints={qr.applyPayloadHints}
               onApplyMerchantGuid={qr.applyMerchantGuid}
-              compareBaselinePayload={qr.payload}
             />
           </div>
         ) : null}
@@ -484,10 +474,8 @@ export function BankQrGenerator() {
               />
               <p className="mt-1 text-[11px] text-muted">
                 {isYaya
-                  ? "Optional tag 62-08 text. Leave blank to use Pay to YAYA:yourusername."
-                  : isWallet
-                    ? "Optional note encoded in tag 62 (purpose). CBE Birr does not use tag 80."
-                    : "Shown to the payer when supported (NBE context tag 80 and purpose in tag 62)."}
+                  ? "Optional payment note. Leave blank for a default pay-to message."
+                  : "Optional note for the payer when their app supports it."}
               </p>
             </div>
 
@@ -526,10 +514,7 @@ export function BankQrGenerator() {
                     }
                     className="mt-0.5 size-3.5 accent-brand"
                   />
-                  <span>
-                    Yaya app tag 62 compatibility (declared length 12, full block). Enable if
-                    standard QRs fail in the Yaya app.
-                  </span>
+                  <span>Alternate Yaya QR format — enable if the Yaya app does not scan your code.</span>
                 </label>
               </>
             ) : null}
@@ -589,9 +574,9 @@ export function BankQrGenerator() {
                 }
                 className={fieldClass}
               >
-                <option value="ips">IPS ET (national interoperable)</option>
+                <option value="ips">National interoperable</option>
                 <option value="legacy" disabled={isWallet}>
-                  Legacy (BIC + 0002246 prefix)
+                  Legacy bank format
                 </option>
               </select>
             </div>
@@ -599,7 +584,7 @@ export function BankQrGenerator() {
             {form.encoding === "ips" && (!isWallet || isYaya) ? (
               <div>
                 <label htmlFor="merchantGuid" className="mb-1 block text-xs font-medium text-muted">
-                  Merchant GUID (optional)
+                  Payment identifier (optional)
                 </label>
                 <input
                   id="merchantGuid"
@@ -608,8 +593,8 @@ export function BankQrGenerator() {
                   onBlur={() => touchField("merchantGuid")}
                   placeholder={
                     isYaya
-                      ? "Paste from a working Yaya QR if derived GUID fails"
-                      : "32 hex chars from your bank, or leave blank"
+                      ? "From a working Yaya QR if auto-fill fails"
+                      : "From your bank if required, or leave blank"
                   }
                   className={`${fieldErrorClass(Boolean(showFieldError("merchantGuid")))} font-mono text-xs`}
                   spellCheck={false}
@@ -750,19 +735,9 @@ export function BankQrGenerator() {
               <div className={`no-print ${panelClass} text-sm`}>
                 <dl className="space-y-2">
                   <div className="flex justify-between gap-4">
-                    <dt className="text-muted">BIC</dt>
-                    <dd className="font-mono text-foreground">{qr.selectedBank.bic}</dd>
-                  </div>
-                  <div className="flex justify-between gap-4">
                     <dt className="text-muted">Amount</dt>
                     <dd className="text-foreground">{qr.amountInQr ?? "Any amount"}</dd>
                   </div>
-                  {qr.poiInQr ? (
-                    <div className="flex justify-between gap-4">
-                      <dt className="text-muted">Mode</dt>
-                      <dd className="text-right text-foreground">{qr.poiInQr}</dd>
-                    </div>
-                  ) : null}
                   {qr.remarkInQr ? (
                     <div className="flex justify-between gap-4">
                       <dt className="text-muted">Remark</dt>
@@ -770,28 +745,12 @@ export function BankQrGenerator() {
                     </div>
                   ) : null}
                 </dl>
-                <div className="mt-4 border-t border-border pt-4">
-                  <div className="mb-2 flex items-center justify-between">
-                    <span className="text-xs text-muted">Payload string</span>
-                    <button
-                      type="button"
-                      onClick={() => void copyPayload()}
-                      className="text-xs font-medium text-brand hover:underline"
-                    >
-                      Copy
-                    </button>
-                  </div>
-                  <pre
-                    data-testid="qr-payload"
-                    className="max-h-36 overflow-auto border border-border bg-background p-2 font-mono text-[10px] leading-relaxed break-all text-foreground"
-                  >
-                    {qr.payload}
-                  </pre>
-                  <p className="mt-2 text-[10px] leading-relaxed text-muted">
-                    The payload encodes your account or wallet identifiers. Share the QR image for
-                    payments; only paste the raw string when debugging with the decoder above.
-                  </p>
-                </div>
+                <p className="mt-4 border-t border-border pt-4 text-[11px] leading-relaxed text-muted">
+                  Share the QR image with payers. Do not publish raw encoded strings.
+                </p>
+                <span data-testid="qr-payload" className="sr-only" aria-hidden>
+                  {qr.payload}
+                </span>
               </div>
             ) : null}
           </aside>

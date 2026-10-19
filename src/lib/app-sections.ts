@@ -24,14 +24,13 @@ export const APP_NAV_ITEMS: readonly AppNavItem[] = [
     id: "verify",
     label: "Verify payment",
     shortLabel: "Verify",
-    description:
-      "Confirm a customer transfer with Alad using a receipt URL or reference, optional settlement and amount checks.",
+    description: "Confirm a customer transfer using a receipt link or reference.",
   },
   {
     id: "decoder",
-    label: "Payload decoder",
-    shortLabel: "Decode",
-    description: "Paste or scan a QR string to inspect tags and compare with your preview.",
+    label: "Import from QR",
+    shortLabel: "Import",
+    description: "Photograph an existing payment QR to fill in payee details.",
   },
   {
     id: "banks",

@@ -49,7 +49,7 @@ export function getFormFieldError(
         if (!form.merchantGuid.trim()) return null;
         const g = form.merchantGuid.trim().replace(/-/g, "").toLowerCase();
         if (!/^[0-9a-f]{32}$/.test(g)) {
-          return "Must be 32 hex characters (UUID without hyphens).";
+          return "Invalid payment identifier format.";
         }
         return null;
       default:

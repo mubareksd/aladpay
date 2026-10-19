@@ -59,7 +59,7 @@ export function AladVerifyPanel({ defaults }: AladVerifyPanelProps) {
   const [checkoutResult, setCheckoutResult] = useState<AladCheckoutCreateResponse | null>(null);
 
   useEffect(() => {
-    void fetch("/api/alad/verify")
+    void fetch("/api/alad/status")
       .then((r) => r.json())
       .then((data: { configured?: boolean }) => setConfigured(Boolean(data.configured)))
       .catch(() => setConfigured(false));
@@ -182,25 +182,14 @@ export function AladVerifyPanel({ defaults }: AladVerifyPanelProps) {
 
   return (
     <div className={`space-y-4 ${panelClass}`}>
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <p className="text-sm text-muted">
-          Verify receipts via{" "}
-          <a
-            href="https://alad.et/docs"
-            className="font-medium text-brand hover:underline"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Alad
-          </a>
-          . Keys stay on the server; use receipt URL or reference + bank.
+      <p className="text-sm text-muted">
+        Confirm an incoming transfer using a receipt link or transaction reference from the payer.
+      </p>
+      {configured === false ? (
+        <p className="text-xs text-amber-900" role="status">
+          Verification is not enabled on this deployment.
         </p>
-        {configured === false ? (
-          <span className="text-xs text-amber-900" role="status">
-            Set <code className="font-mono">ALAD_API_KEY</code> to enable.
-          </span>
-        ) : null}
-      </div>
+      ) : null}
 
       <fieldset>
         <legend className="mb-2 text-xs font-medium text-muted">Lookup</legend>
@@ -241,7 +230,7 @@ export function AladVerifyPanel({ defaults }: AladVerifyPanelProps) {
             id="alad-url"
             value={url}
             onChange={(e) => setUrl(e.target.value)}
-            placeholder="https://transactioninfo.ethiotelecom.et/receipt/…"
+            placeholder="Receipt link from SMS or bank app"
             className={fieldClass}
             autoComplete="off"
             spellCheck={false}
@@ -261,7 +250,7 @@ export function AladVerifyPanel({ defaults }: AladVerifyPanelProps) {
             >
               {ALAD_BANK_OPTIONS.map((opt) => (
                 <option key={opt.code} value={opt.code}>
-                  {opt.label} ({opt.code})
+                  {opt.label}
                 </option>
               ))}
             </select>
@@ -284,7 +273,7 @@ export function AladVerifyPanel({ defaults }: AladVerifyPanelProps) {
       <div className="grid gap-4 md:grid-cols-2">
         <div>
           <label htmlFor="alad-sender" className="mb-1 block text-xs font-medium text-muted">
-            Sender account_number
+            Payer account
             {needsSenderAccount ? " (required)" : " (optional)"}
           </label>
           <input
@@ -292,7 +281,7 @@ export function AladVerifyPanel({ defaults }: AladVerifyPanelProps) {
             value={accountNumber}
             onChange={(e) => setAccountNumber(e.target.value)}
             className={fieldClass}
-            placeholder="Payer account — not your settlement account"
+            placeholder="Account the payment was sent from"
           />
         </div>
         <div>
@@ -313,7 +302,7 @@ export function AladVerifyPanel({ defaults }: AladVerifyPanelProps) {
       <div className="grid gap-4 md:grid-cols-2">
         <div>
           <label htmlFor="alad-settlement" className="mb-1 block text-xs font-medium text-muted">
-            Your settlement account (optional)
+            Your receiving account (optional)
           </label>
           <input
             id="alad-settlement"
@@ -322,7 +311,7 @@ export function AladVerifyPanel({ defaults }: AladVerifyPanelProps) {
             className={fieldClass}
             placeholder="Account that should receive funds"
           />
-          <p className="mt-1 text-[11px] text-muted">Adds settlement_match when the receipt is valid.</p>
+          <p className="mt-1 text-[11px] text-muted">Check that funds arrived on this account.</p>
         </div>
         <div>
           <label htmlFor="alad-expected" className="mb-1 block text-xs font-medium text-muted">
@@ -335,7 +324,7 @@ export function AladVerifyPanel({ defaults }: AladVerifyPanelProps) {
             inputMode="decimal"
             className={fieldClass}
           />
-          <p className="mt-1 text-[11px] text-muted">Adds amount_match against sent_amount / total_paid.</p>
+          <p className="mt-1 text-[11px] text-muted">Check that the paid amount matches what you expect.</p>
         </div>
       </div>
 
@@ -357,57 +346,53 @@ export function AladVerifyPanel({ defaults }: AladVerifyPanelProps) {
 
       {retryAfter ? (
         <p className="text-xs text-muted" role="status">
-          Retry-After: {retryAfter}s (upstream may be busy)
+          The bank may be busy — try again in a moment.
         </p>
       ) : null}
 
       {result ? (
         <div className="border border-border bg-background p-4 text-sm" data-testid="alad-verify-result">
           <p className="font-medium text-foreground">
-            {result.valid ? "Valid receipt" : "Not verified"} ·{" "}
-            <span className="font-mono text-xs">{result.status}</span>
+            {result.valid ? "Payment confirmed" : "Could not confirm payment"}
             {result.bank ? ` · ${aladBankLabel(result.bank)}` : null}
-            {result.cached ? " · cached" : null}
           </p>
           {result.data ? (
             <dl className="mt-3 space-y-1.5 text-xs">
-              {(
-                [
-                  ["Sender", result.data.sender_name],
-                  ["Sender account", result.data.sender_account],
-                  ["Receiver", result.data.receiver_name],
-                  ["Receiver account", result.data.receiver_account],
-                  ["Sent", result.data.sent_amount],
-                  ["Total paid", result.data.total_paid],
-                  ["Date", result.data.transfer_date],
-                  ["Transaction ID", result.data.transaction_id],
-                ] as const
-              ).map(([label, value]) =>
-                value ? (
-                  <div key={label} className="flex justify-between gap-3">
-                    <dt className="text-muted">{label}</dt>
-                    <dd className="max-w-[65%] text-right text-foreground">{value}</dd>
-                  </div>
-                ) : null,
-              )}
+              {result.data.sender_name ? (
+                <div className="flex justify-between gap-3">
+                  <dt className="text-muted">From</dt>
+                  <dd className="max-w-[65%] text-right text-foreground">{result.data.sender_name}</dd>
+                </div>
+              ) : null}
+              {result.data.total_paid ?? result.data.sent_amount ? (
+                <div className="flex justify-between gap-3">
+                  <dt className="text-muted">Amount</dt>
+                  <dd className="text-foreground">
+                    {result.data.total_paid ?? result.data.sent_amount}
+                  </dd>
+                </div>
+              ) : null}
+              {result.data.transfer_date ? (
+                <div className="flex justify-between gap-3">
+                  <dt className="text-muted">Date</dt>
+                  <dd className="text-foreground">{result.data.transfer_date}</dd>
+                </div>
+              ) : null}
             </dl>
           ) : null}
           {result.settlement_match ? (
             <p className="mt-3 text-xs text-muted">
-              Settlement match:{" "}
+              Received on your account:{" "}
               <span className={result.settlement_match.matched ? "text-brand" : "text-red-800"}>
-                {result.settlement_match.matched ? "yes" : "no"}
+                {result.settlement_match.matched ? "Yes" : "No"}
               </span>
-              {result.settlement_match.match_confidence
-                ? ` (${result.settlement_match.match_confidence})`
-                : null}
             </p>
           ) : null}
           {result.amount_match ? (
             <p className="mt-1 text-xs text-muted">
-              Amount match:{" "}
+              Expected amount:{" "}
               <span className={result.amount_match.matched ? "text-brand" : "text-red-800"}>
-                {result.amount_match.matched ? "yes" : "no"}
+                {result.amount_match.matched ? "Matches" : "Does not match"}
               </span>
             </p>
           ) : null}
@@ -420,13 +405,13 @@ export function AladVerifyPanel({ defaults }: AladVerifyPanelProps) {
           className="text-sm font-medium text-brand hover:underline"
           onClick={() => setCheckoutOpen((v) => !v)}
         >
-          {checkoutOpen ? "Hide" : "Show"} Alad checkout (collect payment)
+          {checkoutOpen ? "Hide" : "Show"} hosted checkout link
         </button>
         {checkoutOpen ? (
           <div className="mt-4 space-y-3">
             <p className="text-xs text-muted">
-              Creates a hosted session at checkout.alad.et. Customer pays into your settlement
-              account; paid status requires a live receipt match.
+              Send customers a time-limited page to pay into your account and confirm their
+              transfer.
             </p>
             <div className="grid gap-4 md:grid-cols-2">
               <div>

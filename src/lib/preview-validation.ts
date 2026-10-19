@@ -41,7 +41,7 @@ export function getPreviewBlockReason(
     if (form.merchantGuid.trim()) {
       const g = form.merchantGuid.trim().replace(/-/g, "").toLowerCase();
       if (!/^[0-9a-f]{32}$/.test(g)) {
-        return "Merchant GUID must be 32 hex characters.";
+        return "Invalid payment identifier format.";
       }
     }
   } catch (e) {

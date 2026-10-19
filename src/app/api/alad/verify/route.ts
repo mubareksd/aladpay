@@ -8,7 +8,7 @@ export async function POST(request: Request) {
       {
         valid: false,
         status: "invalid",
-        error: "Payment verification is not configured. Set ALAD_API_KEY on the server.",
+        error: "Payment verification is not available.",
       },
       { status: 503 },
     );
@@ -52,11 +52,5 @@ export async function POST(request: Request) {
 }
 
 export async function GET() {
-  return NextResponse.json(
-    {
-      configured: isAladConfigured(),
-      endpoint: "POST /api/alad/verify proxies to https://api.alad.et/api/v2/verify",
-    },
-    { status: 200 },
-  );
+  return NextResponse.json({ configured: isAladConfigured() }, { status: 200 });
 }

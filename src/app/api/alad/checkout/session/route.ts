@@ -11,7 +11,7 @@ export async function POST(request: Request) {
       {
         error: true,
         success: false,
-        msg: "Checkout is not configured. Set ALAD_API_KEY on the server.",
+        msg: "Checkout is not available.",
       },
       { status: 503 },
     );

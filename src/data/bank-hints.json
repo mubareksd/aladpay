@@ -1,7 +1,7 @@
 {
-  "ABYSETAA": "Some Abyssinia QRs use legacy encoding. Try legacy if IPS fails.",
-  "DASHETAA": "Prefer IPS ET on the national QR network.",
-  "AWINETAA": "Prefer IPS ET on the national QR network.",
-  "CBEBETAA": "Uses full 2519xxxxxxxx phone in tag 28 and MCC 4829.",
-  "YAYAETAA": "Paste merchant GUID from a working Yaya QR if payment fails. Try tag 62 compatibility if needed."
+  "ABYSETAA": "If scans fail, try legacy format or import from a working QR photo.",
+  "DASHETAA": "Use the national interoperable standard when possible.",
+  "AWINETAA": "Use the national interoperable standard when possible.",
+  "CBEBETAA": "Use your registered wallet phone number.",
+  "YAYAETAA": "If payment fails, import from a working QR or try compatibility mode."
 }

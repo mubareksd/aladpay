@@ -13,7 +13,7 @@ export function CheckoutSuccessReturn() {
     <main className="mx-auto max-w-lg px-4 py-12">
       <h1 className="text-xl font-semibold text-foreground">Payment received</h1>
       <p className="mt-2 text-sm text-muted">
-        Alad checkout reported a successful payment
+        Your checkout reported a successful payment
         {sessionId ? ` for session ${sessionId}` : ""}.
         {amount ? ` Amount: ${amount} ${currency}.` : null}
       </p>
