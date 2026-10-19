@@ -71,6 +71,26 @@ export function normalizePhone(phone: string | undefined | null): string {
   return [...trimmed].filter((ch) => /\d/.test(ch) || ch === "+").join("");
 }
 
+/** EMV QR tag 54. Omit when empty; value is a positive amount string (max 13 chars). */
+export function formatTransactionAmount(raw: string | undefined | null): string | null {
+  if (!raw?.trim()) return null;
+  const normalized = raw.trim().replace(/,/g, "");
+  if (!/^\d+(\.\d{1,2})?$/.test(normalized)) {
+    throw new Error("Amount must be a positive number with up to two decimal places.");
+  }
+  const value = Number(normalized);
+  if (!Number.isFinite(value) || value <= 0) {
+    throw new Error("Amount must be greater than zero.");
+  }
+  const [whole, frac = ""] = normalized.split(".");
+  const trimmedFrac = frac.replace(/0+$/, "");
+  const formatted = trimmedFrac ? `${whole}.${trimmedFrac}` : whole;
+  if (formatted.length > 13) {
+    throw new Error("Amount is too long for EMV tag 54 (max 13 characters).");
+  }
+  return formatted;
+}
+
 export type BuildPayloadInput = {
   bank: Bank;
   account: string;
@@ -79,6 +99,7 @@ export type BuildPayloadInput = {
   till?: string | null;
   city?: string;
   merchantCategory?: string;
+  amount?: string | null;
 };
 
 export function buildPayload(input: BuildPayloadInput): string {
@@ -90,6 +111,7 @@ export function buildPayload(input: BuildPayloadInput): string {
     till,
     city: rawCity = "ADDIS ABABA",
     merchantCategory: rawCategory = "5700",
+    amount: rawAmount,
   } = input;
 
   const account = rawAccount.trim();
@@ -98,6 +120,7 @@ export function buildPayload(input: BuildPayloadInput): string {
   const tillValue = (till ?? "").trim();
   const city = rawCity.trim().toUpperCase();
   const merchantCategory = rawCategory.trim();
+  const amount = formatTransactionAmount(rawAmount);
 
   if (!account) throw new Error("Account number is required.");
   if (!name) throw new Error("Recipient/merchant name is required.");
@@ -121,6 +144,7 @@ export function buildPayload(input: BuildPayloadInput): string {
     tlv("28", merchantAccount) +
     tlv("52", merchantCategory) +
     tlv("53", "230") +
+    (amount ? tlv("54", amount) : "") +
     tlv("58", "ET") +
     tlv("59", name) +
     tlv("60", city);
