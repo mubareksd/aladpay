@@ -1,6 +1,9 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { AppShell } from "@/components/app-shell";
+import type { AppSection } from "@/lib/app-sections";
+import { sectionMeta } from "@/lib/app-sections";
 import { sortBanksForPicker, BANKS } from "@/lib/bank-list";
 import { BankLogo } from "@/components/bank-logo";
 import { ChevronDown } from "@/components/chevron-down";
@@ -17,6 +20,10 @@ import {
   usesWalletPhone,
 } from "@/lib/ethiopian-bank-qr";
 import {
+  getFormFieldError,
+  type ValidatedFormField,
+} from "@/lib/form-field-errors";
+import {
   asideClass,
   btnPrimaryClass,
   btnSecondaryClass,
@@ -25,6 +32,12 @@ import {
   pageContainerClass,
   panelClass,
 } from "@/lib/ui-classes";
+
+const ETB_AMOUNT_PRESETS = [50, 100, 500, 1000] as const;
+
+function fieldErrorClass(hasError: boolean): string {
+  return hasError ? `${fieldClass} border-red-400 focus:border-red-500 focus:ring-red-500` : fieldClass;
+}
 
 export function BankQrGenerator() {
   const { accounts, upsert, remove, mergeImported, replaceImported } = useSavedAccounts();
@@ -36,10 +49,21 @@ export function BankQrGenerator() {
   const [quickAmount, setQuickAmount] = useState("");
   const [bankPickerOpen, setBankPickerOpen] = useState(false);
   const [bankPickerQuery, setBankPickerQuery] = useState("");
-  const [showBankList, setShowBankList] = useState(false);
+  const [activeSection, setActiveSection] = useState<AppSection>("create");
   const [bankFilter, setBankFilter] = useState("");
+  const [touched, setTouched] = useState<Partial<Record<ValidatedFormField, boolean>>>({});
 
   const form = qr.form;
+
+  const touchField = useCallback((field: ValidatedFormField) => {
+    setTouched((prev) => (prev[field] ? prev : { ...prev, [field]: true }));
+  }, []);
+
+  const showFieldError = useCallback(
+    (field: ValidatedFormField) =>
+      touched[field] ? getFormFieldError(form, field) : null,
+    [form, touched],
+  );
 
   const selectedBankOption = useMemo(
     () => BANKS.find((b) => b.bic === form.bankBic),
@@ -114,66 +138,81 @@ export function BankQrGenerator() {
     link.click();
   }, [qr.qrDataUrl]);
 
-  return (
-    <div className="min-h-full">
-      <div className="border-b border-border bg-surface pt-[env(safe-area-inset-top,0)]">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3 sm:px-6 sm:py-4 lg:px-8">
-          <p className="text-sm font-semibold tracking-wide text-brand sm:text-base">AladPay</p>
-          <p className="text-xs text-muted sm:text-sm">Ethiopia · ETB</p>
-        </div>
-      </div>
+  const goToSection = useCallback((section: AppSection) => {
+    setActiveSection(section);
+  }, []);
 
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }, [activeSection]);
+
+  const section = sectionMeta(activeSection);
+  const sectionTitle =
+    activeSection === "banks" ? `All banks (${BANKS.length})` : section.label;
+
+  return (
+    <AppShell activeSection={activeSection} onSectionChange={goToSection}>
       <div className={pageContainerClass}>
         <header className="max-w-2xl">
           <h1 className="text-xl font-semibold text-foreground sm:text-2xl md:text-[1.65rem]">
-            Bank payment QR
+            {sectionTitle}
           </h1>
           <p className="mt-2 text-sm leading-relaxed text-muted md:text-[0.9375rem]">
-            Static QR for receiving money. Amount is optional. Scan with the payer&apos;s bank app
-            to confirm it works before you rely on it.
+            {section.description}
           </p>
         </header>
 
-        <div className="mt-6 md:mt-8">
-          <SavedAccountsPanel
-            accounts={accounts}
-            activeId={activeSavedId}
-            saveLabel={saveLabel}
-            onSaveLabelChange={setSaveLabel}
-            onSelect={(account) => {
-              qr.loadSavedAccount(account);
-              setActiveSavedId(account.id);
-              setSaveLabel(account.label);
-            }}
-            onClearSelection={() => {
-              setActiveSavedId(null);
-              setSaveLabel("");
-            }}
-            onSave={saveCurrentAccount}
-            onRemove={(id) => {
-              remove(id);
-              if (activeSavedId === id) {
+        {activeSection === "saved" ? (
+          <div className="no-print mt-6 md:mt-8">
+            <SavedAccountsPanel
+              accounts={accounts}
+              activeId={activeSavedId}
+              saveLabel={saveLabel}
+              onSaveLabelChange={setSaveLabel}
+              onSelect={(account) => {
+                qr.loadSavedAccount(account);
+                setActiveSavedId(account.id);
+                setSaveLabel(account.label);
+                goToSection("create");
+              }}
+              onClearSelection={() => {
                 setActiveSavedId(null);
                 setSaveLabel("");
-              }
-            }}
-            onQuickQr={(account, withAmount) => void quickQrFromSaved(account, withAmount)}
-            quickAmount={quickAmount}
-            onQuickAmountChange={setQuickAmount}
-            onMergeImport={mergeImported}
-            onReplaceImport={replaceImported}
-          />
-        </div>
+              }}
+              onSave={saveCurrentAccount}
+              onRemove={(id) => {
+                remove(id);
+                if (activeSavedId === id) {
+                  setActiveSavedId(null);
+                  setSaveLabel("");
+                }
+              }}
+              onQuickQr={async (account, withAmount) => {
+                await quickQrFromSaved(account, withAmount);
+                goToSection("create");
+              }}
+              quickAmount={quickAmount}
+              onQuickAmountChange={setQuickAmount}
+              onMergeImport={mergeImported}
+              onReplaceImport={replaceImported}
+            />
+          </div>
+        ) : null}
 
-        <PayloadDecoderPanel
-          onApplyHints={qr.applyPayloadHints}
-          onApplyMerchantGuid={qr.applyMerchantGuid}
-          compareBaselinePayload={qr.payload}
-        />
+        {activeSection === "decoder" ? (
+          <div className="no-print mt-6 md:mt-8">
+            <PayloadDecoderPanel
+              onApplyHints={qr.applyPayloadHints}
+              onApplyMerchantGuid={qr.applyMerchantGuid}
+              compareBaselinePayload={qr.payload}
+            />
+          </div>
+        ) : null}
 
+        {activeSection === "create" ? (
         <div className={mainGridClass}>
           <form
-            className={`order-2 space-y-4 md:order-1 ${panelClass}`}
+            className={`no-print order-2 space-y-4 md:order-1 ${panelClass}`}
             onSubmit={(e) => {
               e.preventDefault();
               void qr.generate();
@@ -295,12 +334,18 @@ export function BankQrGenerator() {
                 inputMode={accountInput.inputMode}
                 value={form.account}
                 onChange={(e) => qr.updateField("account", e.target.value)}
+                onBlur={() => touchField("account")}
                 placeholder={accountInput.placeholder}
-                className={fieldClass}
+                className={fieldErrorClass(Boolean(showFieldError("account")))}
                 autoComplete={isWallet ? "tel" : "off"}
+                aria-invalid={Boolean(showFieldError("account"))}
                 data-testid="account-input"
               />
-              {accountInput.hint ? (
+              {showFieldError("account") ? (
+                <p className="mt-1 text-[11px] text-red-800" role="alert">
+                  {showFieldError("account")}
+                </p>
+              ) : accountInput.hint ? (
                 <p className="mt-1 text-[11px] leading-relaxed text-muted">{accountInput.hint}</p>
               ) : null}
             </div>
@@ -314,10 +359,17 @@ export function BankQrGenerator() {
                 required
                 value={form.name}
                 onChange={(e) => qr.updateField("name", e.target.value)}
-                className={fieldClass}
+                onBlur={() => touchField("name")}
+                className={fieldErrorClass(Boolean(showFieldError("name")))}
                 autoComplete="name"
+                aria-invalid={Boolean(showFieldError("name"))}
                 data-testid="name-input"
               />
+              {showFieldError("name") ? (
+                <p className="mt-1 text-[11px] text-red-800" role="alert">
+                  {showFieldError("name")}
+                </p>
+              ) : null}
             </div>
 
             <fieldset>
@@ -325,6 +377,7 @@ export function BankQrGenerator() {
               <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
+                  aria-pressed={form.amountMode === "any"}
                   onClick={() => {
                     qr.updateField("amountMode", "any");
                     qr.updateField("amount", "");
@@ -339,6 +392,7 @@ export function BankQrGenerator() {
                 </button>
                 <button
                   type="button"
+                  aria-pressed={form.amountMode === "fixed"}
                   onClick={() => qr.updateField("amountMode", "fixed")}
                   className={
                     form.amountMode === "fixed"
@@ -362,8 +416,27 @@ export function BankQrGenerator() {
                   inputMode="decimal"
                   value={form.amount}
                   onChange={(e) => qr.updateField("amount", e.target.value)}
-                  className={fieldClass}
+                  onBlur={() => touchField("amount")}
+                  className={fieldErrorClass(Boolean(showFieldError("amount")))}
+                  aria-invalid={Boolean(showFieldError("amount"))}
                 />
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {ETB_AMOUNT_PRESETS.map((preset) => (
+                    <button
+                      key={preset}
+                      type="button"
+                      className={btnSecondaryClass + " !min-h-8 px-2.5 text-xs"}
+                      onClick={() => qr.updateField("amount", String(preset))}
+                    >
+                      {preset} ETB
+                    </button>
+                  ))}
+                </div>
+                {showFieldError("amount") ? (
+                  <p className="mt-1 text-[11px] text-red-800" role="alert">
+                    {showFieldError("amount")}
+                  </p>
+                ) : null}
               </div>
             ) : null}
 
@@ -399,10 +472,17 @@ export function BankQrGenerator() {
                     required
                     value={form.yayaUsername}
                     onChange={(e) => qr.updateField("yayaUsername", e.target.value)}
+                    onBlur={() => touchField("yayaUsername")}
                     placeholder="mengstabkete"
                     autoComplete="username"
-                    className={fieldClass}
+                    className={fieldErrorClass(Boolean(showFieldError("yayaUsername")))}
+                    aria-invalid={Boolean(showFieldError("yayaUsername"))}
                   />
+                  {showFieldError("yayaUsername") ? (
+                    <p className="mt-1 text-[11px] text-red-800" role="alert">
+                      {showFieldError("yayaUsername")}
+                    </p>
+                  ) : null}
                 </div>
                 <label className="flex items-start gap-2 text-xs text-muted">
                   <input
@@ -495,14 +575,21 @@ export function BankQrGenerator() {
                   id="merchantGuid"
                   value={form.merchantGuid}
                   onChange={(e) => qr.updateField("merchantGuid", e.target.value)}
+                  onBlur={() => touchField("merchantGuid")}
                   placeholder={
                     isYaya
                       ? "Paste from a working Yaya QR if derived GUID fails"
                       : "32 hex chars from your bank, or leave blank"
                   }
-                  className={`${fieldClass} font-mono text-xs`}
+                  className={`${fieldErrorClass(Boolean(showFieldError("merchantGuid")))} font-mono text-xs`}
                   spellCheck={false}
+                  aria-invalid={Boolean(showFieldError("merchantGuid"))}
                 />
+                {showFieldError("merchantGuid") ? (
+                  <p className="mt-1 text-[11px] text-red-800" role="alert">
+                    {showFieldError("merchantGuid")}
+                  </p>
+                ) : null}
               </div>
             ) : null}
 
@@ -540,7 +627,7 @@ export function BankQrGenerator() {
           </form>
 
           <aside className={`order-1 md:order-2 ${asideClass}`}>
-            <div className={panelClass}>
+            <div className={`no-print ${panelClass}`}>
               {selectedBankOption ? (
                 <div className="mb-4 flex items-center gap-3 border-b border-border pb-4">
                   <BankLogo
@@ -586,14 +673,51 @@ export function BankQrGenerator() {
                 )}
               </div>
               {qr.qrDataUrl ? (
-                <button type="button" onClick={downloadPng} className={`mt-3 ${btnSecondaryClass}`}>
-                  Save as PNG
-                </button>
+                <div className="no-print mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  <button type="button" onClick={downloadPng} className={btnSecondaryClass}>
+                    Save as PNG
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => window.print()}
+                    className={btnSecondaryClass}
+                  >
+                    Print QR
+                  </button>
+                </div>
+              ) : null}
+              {qr.qrDataUrl ? (
+                <div className="no-print mt-4 border-t border-border pt-4">
+                  <p className="text-xs font-medium text-foreground">Before you share</p>
+                  <ul className="mt-2 list-inside list-disc space-y-1 text-[11px] leading-relaxed text-muted">
+                    <li>Scan with your own bank or wallet app and confirm payee details.</li>
+                    <li>For wallets, verify phone, username, and amount (if fixed).</li>
+                    <li>Re-generate if you change account, bank, or amount mode.</li>
+                  </ul>
+                </div>
               ) : null}
             </div>
 
+            {qr.qrDataUrl ? (
+              <div className="print-only print-sheet">
+                <p className="text-lg font-semibold text-foreground">
+                  {selectedBankOption?.name ?? "Payment QR"}
+                </p>
+                {form.name ? (
+                  <p className="mt-1 text-sm text-muted">{form.name}</p>
+                ) : null}
+                {qr.amountInQr ? (
+                  <p className="mt-1 text-sm font-medium text-foreground">{qr.amountInQr}</p>
+                ) : (
+                  <p className="mt-1 text-sm text-muted">Any amount</p>
+                )}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={qr.qrDataUrl} alt="Payment QR code" width={280} height={280} className="mx-auto mt-4" />
+              </div>
+            ) : null}
+
             {qr.selectedBank && qr.payload ? (
-              <div className={`${panelClass} text-sm`}>
+              <div className={`no-print ${panelClass} text-sm`}>
                 <dl className="space-y-2">
                   <div className="flex justify-between gap-4">
                     <dt className="text-muted">BIC</dt>
@@ -633,35 +757,30 @@ export function BankQrGenerator() {
                   >
                     {qr.payload}
                   </pre>
+                  <p className="mt-2 text-[10px] leading-relaxed text-muted">
+                    The payload encodes your account or wallet identifiers. Share the QR image for
+                    payments; only paste the raw string when debugging with the decoder above.
+                  </p>
                 </div>
               </div>
             ) : null}
           </aside>
         </div>
+        ) : null}
 
-        <section className="mt-8 border-t border-border pt-6 md:mt-10 md:pt-8">
-          <button
-            type="button"
-            onClick={() => setShowBankList((v) => !v)}
-            className="flex min-h-11 w-full items-center justify-between gap-4 text-left active:opacity-80"
-          >
-            <span className="text-sm font-medium text-foreground md:text-base">
-              All banks ({BANKS.length})
-            </span>
-            <span className="text-xs text-muted">{showBankList ? "Close" : "Open list"}</span>
-          </button>
-          {showBankList ? (
-            <div className={`mt-3 ${panelClass} !p-0`}>
+        {activeSection === "banks" ? (
+          <section className="no-print mt-6 md:mt-8">
+            <div className={`${panelClass} !p-0`}>
               <div className="border-b border-border p-3 sm:p-4">
                 <input
                   type="search"
-                  placeholder="Filter"
+                  placeholder="Filter by name or BIC"
                   value={bankFilter}
                   onChange={(e) => setBankFilter(e.target.value)}
                   className={fieldClass}
                 />
               </div>
-              <ul className="max-h-[min(60vh,20rem)] divide-y divide-border overflow-y-auto overscroll-contain md:max-h-72">
+              <ul className="max-h-[min(70vh,28rem)] divide-y divide-border overflow-y-auto overscroll-contain lg:max-h-[calc(100vh-14rem)]">
                 {filteredBanks.map((bank) => (
                   <li key={bank.bic}>
                     <button
@@ -669,12 +788,18 @@ export function BankQrGenerator() {
                       onClick={() => {
                         qr.pickBank(bank.bic);
                         setBankPickerOpen(false);
+                        goToSection("create");
                       }}
                       className="flex min-h-12 w-full flex-col gap-2 px-3 py-3 text-left text-sm hover:bg-brand-soft active:bg-brand-soft sm:min-h-11 sm:flex-row sm:items-center sm:gap-3 sm:py-2.5"
                     >
                       <div className="flex min-w-0 flex-1 items-center gap-3">
                         <BankLogo bic={bank.bic} name={bank.name} size="sm" />
-                        <span className="min-w-0 flex-1 text-foreground">{bank.name}</span>
+                        <span className="min-w-0 flex-1 text-foreground">
+                          {bank.name}
+                          {usesWalletPhone(bank) ? (
+                            <span className="ml-1.5 text-[10px] font-normal text-muted">Wallet</span>
+                          ) : null}
+                        </span>
                       </div>
                       <span className="pl-10 font-mono text-[11px] text-muted sm:shrink-0 sm:pl-0 sm:text-xs">
                         {bank.bic}, code {bank.bankCode}
@@ -684,9 +809,9 @@ export function BankQrGenerator() {
                 ))}
               </ul>
             </div>
-          ) : null}
-        </section>
+          </section>
+        ) : null}
       </div>
-    </div>
+    </AppShell>
   );
 }

@@ -122,88 +122,34 @@ export const WALLET_MERCHANT_CATEGORY = "4829";
 /** MCC on Yaya Wallet request-payment QRs (observed as 0000). */
 export const YAYA_MERCHANT_CATEGORY = "0000";
 
+export { CBE_BIRR_MCC } from "@/lib/wallets/cbe-birr";
+export { YAYA_MCC } from "@/lib/wallets/yaya";
+import { prepareCbeBirrWallet } from "@/lib/wallets/cbe-birr";
+import {
+  prepareYayaWallet,
+  randomYayaReferenceToken,
+  yayaLocalPhoneDigits,
+} from "@/lib/wallets/yaya";
+
 /** How tag 62 is length-prefixed on Yaya Wallet QRs. */
 export type YayaTag62Encoding = "standard" | "yaya_app";
 
 import { crc16CcittFalse, tlv, wrapTag62 } from "@/lib/tlv";
+import { normalizePhone } from "@/lib/wallets/shared-phone";
 
 export { crc16CcittFalse, tlv, wrapTag62 };
 
-export function normalizePhone(phone: string | undefined | null): string {
-  if (!phone) return "";
-  const trimmed = phone.trim();
-  return [...trimmed].filter((ch) => /\d/.test(ch) || ch === "+").join("");
-}
+export {
+  normalizePhone,
+  normalizeWalletPhone,
+  walletPhoneDigitsForTlv,
+} from "@/lib/wallets/shared-phone";
 
-/** Ethiopian mobile for display (E.164 +2519xxxxxxxx). */
-export function normalizeWalletPhone(raw: string): string {
-  return `+${walletPhoneDigitsForTlv(raw)}`;
-}
-
-/**
- * Digits-only wallet id for tag 28 sub-tags 00 and 02 (e.g. 251938158214, no plus sign).
- */
-export function walletPhoneDigitsForTlv(raw: string): string {
-  const compact = normalizePhone(raw).replace(/\s/g, "");
-  const digits = compact.startsWith("+") ? compact.slice(1) : compact;
-  if (/^2519\d{8}$/.test(digits)) return digits;
-  if (/^09\d{8}$/.test(digits)) return `251${digits.slice(1)}`;
-  if (/^9\d{8}$/.test(digits)) return `251${digits}`;
-  throw new Error(
-    "Enter a valid Ethiopian mobile number for the wallet (e.g. +251911234567 or 0911234567).",
-  );
-}
-
-/** Yaya tag 28-02 uses nine digits without the 251 prefix (e.g. 949909116). */
-export function yayaLocalPhoneDigits(raw: string): string {
-  const full = walletPhoneDigitsForTlv(raw);
-  const local = full.slice(3);
-  if (!/^9\d{8}$/.test(local)) {
-    throw new Error("Yaya Wallet phone must be a valid Ethiopian mobile number.");
-  }
-  return local;
-}
-
-/** Tag 62-02 phone line on Yaya QRs (e.g. +251-949909116). */
-export function formatYayaTag62Phone(localNineDigits: string): string {
-  return `+251-${localNineDigits}`;
-}
-
-export function normalizeYayaUsername(raw: string | undefined | null): string {
-  const trimmed = (raw ?? "").trim().replace(/^@/, "");
-  if (!trimmed) return "";
-  if (!/^[a-zA-Z0-9._-]{2,32}$/.test(trimmed)) {
-    throw new Error(
-      "Yaya username must be 2–32 characters (letters, numbers, ., _, -).",
-    );
-  }
-  return trimmed.toLowerCase();
-}
-
-function randomYayaReferenceToken(): string {
-  const bytes = new Uint8Array(6);
-  crypto.getRandomValues(bytes);
-  return Array.from(bytes)
-    .map((b) => b.toString(16).toUpperCase().padStart(2, "0"))
-    .join("");
-}
-
-function buildYayaAdditionalData(
-  localPhone: string,
-  username: string,
-  remark: string | null,
-  requestId: string,
-  referenceToken: string,
-): string {
-  const payLine = remark?.trim() || `Pay to YAYA:${username}`;
-  let additional = "";
-  additional += tlv("20", requestId);
-  additional += tlv("02", formatYayaTag62Phone(localPhone));
-  additional += tlv("04", `YAYA${username}`);
-  additional += tlv("07", referenceToken);
-  additional += tlv("08", payLine);
-  return additional;
-}
+export {
+  formatYayaTag62Phone,
+  normalizeYayaUsername,
+  yayaLocalPhoneDigits,
+} from "@/lib/wallets/yaya";
 
 export function verifyPayloadCrc(payload: string): {
   ok: boolean;
@@ -220,13 +166,6 @@ export function verifyPayloadCrc(payload: string): {
     .toUpperCase()
     .padStart(4, "0");
   return { ok: expected === calculated, expected, calculated };
-}
-
-function titleCaseCity(city: string): string {
-  return city
-    .trim()
-    .toLowerCase()
-    .replace(/(^|\s)(\S)/g, (_, space: string, ch: string) => space + ch.toUpperCase());
 }
 
 /** NBE tag 80 / EMV 62-08 purpose; max 50 characters. */
@@ -314,11 +253,6 @@ function buildMerchantAccountBlock(
   return tlv("00", merchantGuid) + tlv("01", bank.bic) + tlv("02", account);
 }
 
-/** CBE Birr: sub-tag 00 and 02 both hold 2519xxxxxxxx digits. */
-function buildCbeBirrMerchantAccountBlock(bank: Bank, phoneDigits: string): string {
-  return tlv("00", phoneDigits) + tlv("01", bank.bic) + tlv("02", phoneDigits);
-}
-
 export async function buildPayload(input: BuildPayloadInput): Promise<string> {
   const {
     bank,
@@ -351,7 +285,7 @@ export async function buildPayload(input: BuildPayloadInput): Promise<string> {
   let city = rawCity.trim().toUpperCase();
   let merchantAccount: string;
   let includeTag80 = Boolean(remark);
-  let yayaAdditional: string | null = null;
+  let tag62Content: string | null = null;
 
   if (cbeWallet || yayaWallet) {
     if (encoding === "legacy") {
@@ -361,45 +295,42 @@ export async function buildPayload(input: BuildPayloadInput): Promise<string> {
   }
 
   if (cbeWallet) {
-    const phoneDigits = walletPhoneDigitsForTlv(account);
-    account = phoneDigits;
-    city = titleCaseCity(rawCity);
-    merchantCategory =
-      !rawCategory.trim() || rawCategory.trim() === "5700"
-        ? WALLET_MERCHANT_CATEGORY
-        : merchantCategory;
-    merchantAccount = buildCbeBirrMerchantAccountBlock(bank, phoneDigits);
+    const prepared = prepareCbeBirrWallet(
+      bank,
+      account,
+      rawCity,
+      rawCategory,
+      remark,
+    );
+    account = prepared.account;
+    city = prepared.city;
+    merchantCategory = prepared.merchantCategory;
+    merchantAccount = prepared.merchantAccount;
+    tag62Content = prepared.tag62;
     normalizedPhone = "";
     includeTag80 = false;
   } else if (yayaWallet) {
-    const localPhone = yayaLocalPhoneDigits(account);
-    account = localPhone;
-    city = rawCity.trim();
-    const username = normalizeYayaUsername(rawYayaUsername ?? till);
-    if (!username) {
-      throw new Error("Yaya username is required (your handle in the Yaya app, e.g. mengstabkete).");
-    }
     const requestId = rawYayaRequestId?.trim() || crypto.randomUUID();
     const referenceToken = rawYayaReferenceToken?.trim() || randomYayaReferenceToken();
-    if (referenceToken.length !== 12) {
-      throw new Error("Yaya reference token must be 12 characters.");
-    }
-    merchantCategory =
-      !rawCategory.trim() || rawCategory.trim() === "5700"
-        ? YAYA_MERCHANT_CATEGORY
-        : merchantCategory;
     const merchantGuid =
       normalizeMerchantGuid(rawMerchantGuid) ??
-      (await deriveMerchantGuid(bank.bic, localPhone));
-    merchantAccount =
-      tlv("00", merchantGuid) + tlv("01", bank.bic) + tlv("02", localPhone);
-    yayaAdditional = buildYayaAdditionalData(
-      localPhone,
-      username,
+      (await deriveMerchantGuid(bank.bic, yayaLocalPhoneDigits(account)));
+    const prepared = prepareYayaWallet(
+      bank,
+      account,
+      rawCity,
+      rawCategory,
       remark,
+      rawYayaUsername ?? till ?? "",
+      merchantGuid,
       requestId,
       referenceToken,
     );
+    account = prepared.account;
+    city = prepared.city;
+    merchantCategory = prepared.merchantCategory;
+    merchantAccount = prepared.merchantAccount;
+    tag62Content = prepared.tag62;
     normalizedPhone = "";
     includeTag80 = false;
   } else {
@@ -427,12 +358,8 @@ export async function buildPayload(input: BuildPayloadInput): Promise<string> {
   }
 
   let additional = "";
-  if (cbeWallet) {
-    additional += tlv("03", city);
-    if (remark) additional += tlv("08", remark);
-    additional += tlv("10", "");
-  } else if (yayaWallet) {
-    additional = yayaAdditional ?? "";
+  if (cbeWallet || yayaWallet) {
+    additional = tag62Content ?? "";
   } else {
     if (normalizedPhone) additional += tlv("02", normalizedPhone);
     if (tillValue) additional += tlv("07", tillValue);

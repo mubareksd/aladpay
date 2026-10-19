@@ -33,6 +33,17 @@ describe("parseEmvQrPayload", () => {
     expect(hints?.account).toBe("0949909116");
   });
 
+  it("rejects payload without CRC tag", () => {
+    expect(() => parseEmvQrPayload("000201010211")).toThrow(/6304/);
+  });
+
+  it("parses with invalid CRC but reports crcValid false", () => {
+    const bad = `${CBE_SAMPLE.slice(0, -4)}0000`;
+    const parsed = parseEmvQrPayload(bad);
+    expect(parsed.crcValid).toBe(false);
+    expect(parsed.bic).toBe("CBEBETAA");
+  });
+
   it("diffs two parsed payloads", () => {
     const left = parseEmvQrPayload(CBE_SAMPLE);
     const right = parseEmvQrPayload(YAYA_SAMPLE);

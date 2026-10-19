@@ -42,3 +42,12 @@ export function compareParsedPayloads(
   });
   return rows;
 }
+
+export function formatDiffAsText(rows: PayloadFieldDiff[]): string {
+  return rows
+    .map((row) => {
+      const mark = row.same ? " " : "!";
+      return `${mark} ${row.field}\n  yours:   ${row.left}\n  pasted:  ${row.right}`;
+    })
+    .join("\n\n");
+}

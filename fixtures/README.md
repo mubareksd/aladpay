@@ -1,10 +1,22 @@
 # Verified QR payloads
 
-Add payload strings that scan successfully in a real app. Tests in `src/lib/*.test.ts` should assert CRC and critical tags; note the app and date in a comment here.
+Real payload strings that worked (or were issued) by a bank/wallet app. Tests load these files via `loadFixturePayload()` in `src/lib/load-fixture.ts`.
 
-| File | Wallet or bank | Verified in app | Date |
-|------|----------------|-----------------|------|
-| `cbe-birr.txt` | CBEBETAA | CBE Birr (user sample) | 2026-10 |
-| `yaya-sample.txt` | YAYAETAA | Yaya request payment (user sample) | 2026-10 |
+## Adding a new wallet or bank layout
 
-Tests load these via `loadFixturePayload()` in `src/lib/load-fixture.ts`.
+1. Save the full payload string as `fixtures/<name>.txt` (one line, no spaces).
+2. Run **Decode QR or payload** in the app and confirm tags (BIC, 28-02, MCC, 62, CRC).
+3. Add Vitest coverage:
+   - `parseEmvQrPayload(fixture)` for decode fields and CRC flag
+   - `buildPayload(...)` with fixed test hooks where random IDs would differ
+4. Implement builder under `src/lib/wallets/` (do not reuse another wallet’s TLV layout).
+5. Note verification in the table below.
+
+## Catalog
+
+| File | BIC | Notes | Verified |
+|------|-----|--------|----------|
+| `cbe-birr.txt` | CBEBETAA | Golden match in tests | User sample, 2026-10 |
+| `yaya-sample.txt` | YAYAETAA | Lenient tag 62; CRC may not recalc to sample | Yaya app request payment, 2026-10 |
+
+**Telebirr / others:** add a fixture first; no builder until a sample exists.

@@ -3,7 +3,7 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import { decodeQrPayloadFromImageFile } from "@/lib/decode-qr-image";
 import { parseEmvQrPayload, payloadToFormHints } from "@/lib/emv-qr-parse";
-import { compareParsedPayloads } from "@/lib/payload-compare";
+import { compareParsedPayloads, formatDiffAsText } from "@/lib/payload-compare";
 import { btnSecondaryClass, fieldClass, panelClass } from "@/lib/ui-classes";
 
 type PayloadDecoderPanelProps = {
@@ -188,9 +188,18 @@ export function PayloadDecoderPanel({
           ) : null}
           {diffRows ? (
             <div className="border-t border-border pt-3">
-              <p className="mb-2 text-xs font-medium text-foreground">
-                Diff: your preview vs pasted payload
-              </p>
+              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                <p className="text-xs font-medium text-foreground">
+                  Diff: your preview vs pasted payload
+                </p>
+                <button
+                  type="button"
+                  className="text-xs font-medium text-brand hover:underline"
+                  onClick={() => void navigator.clipboard.writeText(formatDiffAsText(diffRows))}
+                >
+                  Copy diff
+                </button>
+              </div>
               <table className="w-full text-left text-[11px]">
                 <thead>
                   <tr className="text-muted">

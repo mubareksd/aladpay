@@ -3,11 +3,10 @@ import {
   formatTransactionAmount,
   isCbeBirrWallet,
   isYayaWallet,
-  normalizeYayaUsername,
   type Bank,
-  walletPhoneDigitsForTlv,
-  yayaLocalPhoneDigits,
 } from "@/lib/ethiopian-bank-qr";
+import { walletPhoneDigitsForTlv } from "@/lib/wallets/shared-phone";
+import { normalizeYayaUsername, yayaLocalPhoneDigits } from "@/lib/wallets/yaya";
 import type { PaymentQrFormState } from "@/lib/payment-form-state";
 
 export function getPreviewBlockReason(

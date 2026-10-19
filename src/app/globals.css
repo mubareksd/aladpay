@@ -57,3 +57,33 @@ button {
     scroll-behavior: smooth;
   }
 }
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+
+  .print-only {
+    display: block !important;
+  }
+
+  body {
+    background: #fff;
+    padding: 0;
+  }
+
+  .print-sheet {
+    max-width: 100%;
+    padding: 1rem;
+    text-align: center;
+  }
+
+  .print-sheet img {
+    width: 280px;
+    height: 280px;
+  }
+}
+
+.print-only {
+  display: none;
+}
