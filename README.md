@@ -40,6 +40,16 @@ Generate Ethiopian bank and wallet payment QR codes for receiving money.
 
 Run `npm run db:check` after setting `DATABASE_URL` to verify connectivity and create POS tables.
 
+## Accounts & companies
+
+When `DATABASE_URL` is set, the app requires sign-in:
+
+1. **Register** at `/register` — creates your user, a **company**, and an **owner** membership.
+2. **Team** section — owners/admins add **employees** (email + temporary password). Employees sign in at `/login` and access the same company data.
+3. Guest table QR links use `/guest/{company-slug}/{tableId}` (slug shown in the app after publish).
+
+Roles: **owner** (full control), **admin** (team + operations), **employee** (POS and payments). Sessions are httpOnly cookies (14 days).
+
 ## Docker
 
 ```bash

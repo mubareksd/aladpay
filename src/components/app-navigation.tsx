@@ -1,5 +1,6 @@
 "use client";
 
+import { AuthHeader } from "@/components/auth/auth-header";
 import type { AppSection } from "@/lib/app-sections";
 import { APP_NAV_ITEMS } from "@/lib/app-sections";
 
@@ -33,6 +34,15 @@ function NavIcon({ section, active }: { section: AppSection; active: boolean }) 
         <svg viewBox="0 0 24 24" aria-hidden {...common}>
           <path d="M4 6h16M4 12h10M4 18h16" />
           <circle cx="19" cy="12" r="2.5" />
+        </svg>
+      );
+    case "team":
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden {...common}>
+          <circle cx="9" cy="8" r="3" />
+          <circle cx="17" cy="10" r="2.5" />
+          <path d="M3 20c0-3 3-5 6-5s6 2 6 5" />
+          <path d="M14 20c0-2 2-3.5 4-3.5" />
         </svg>
       );
     case "verify":
@@ -79,9 +89,9 @@ export function AppSidebarNav({ active, onChange }: AppNavigationProps) {
       aria-label="Main"
       className="no-print hidden lg:sticky lg:top-0 lg:flex lg:h-[100dvh] lg:w-56 lg:shrink-0 lg:flex-col lg:border-r lg:border-border lg:bg-surface lg:pt-[env(safe-area-inset-top,0)] xl:w-60"
     >
-      <div className="border-b border-border px-5 py-5">
+      <div className="border-b border-border px-5 py-5 space-y-2">
         <p className="text-base font-semibold tracking-wide text-brand">AladPay</p>
-        <p className="mt-0.5 text-xs text-muted">Ethiopia · ETB</p>
+        <AuthHeader />
       </div>
       <ul className="flex flex-1 flex-col gap-0.5 p-3">
         {APP_NAV_ITEMS.map((item) => {

@@ -1,4 +1,4 @@
-export type AppSection = "create" | "saved" | "pos" | "verify" | "decoder" | "banks";
+export type AppSection = "create" | "saved" | "pos" | "team" | "verify" | "decoder" | "banks";
 
 export type AppNavItem = {
   id: AppSection;
@@ -25,6 +25,12 @@ export const APP_NAV_ITEMS: readonly AppNavItem[] = [
     label: "Tables & orders",
     shortLabel: "Orders",
     description: "Tables, kitchen, guest QR ordering, daily reports, and checkout when the bill is ready.",
+  },
+  {
+    id: "team",
+    label: "Team & access",
+    shortLabel: "Team",
+    description: "Add employees and manage who can access your company in AladPay.",
   },
   {
     id: "verify",

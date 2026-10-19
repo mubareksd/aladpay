@@ -8,7 +8,13 @@ import { btnPrimaryClass, btnSecondaryClass, fieldClass, panelClass } from "@/li
 
 type CartLine = Pick<OrderLine, "menuItemId" | "name" | "unitPrice" | "quantity">;
 
-export function GuestOrderPage({ tableId }: { tableId: string }) {
+export function GuestOrderPage({
+  tableId,
+  companySlug,
+}: {
+  tableId: string;
+  companySlug?: string;
+}) {
   const [menu, setMenu] = useState<PublishedGuestMenu | null>(null);
   const [loading, setLoading] = useState(true);
   const [cart, setCart] = useState<CartLine[]>([]);
@@ -17,10 +23,10 @@ export function GuestOrderPage({ tableId }: { tableId: string }) {
   const [done, setDone] = useState(false);
 
   useEffect(() => {
-    void fetchPublishedMenu()
+    void fetchPublishedMenu(companySlug)
       .then(setMenu)
       .finally(() => setLoading(false));
-  }, []);
+  }, [companySlug]);
 
   const table = menu?.tables.find((t) => t.id === tableId);
   const items = useMemo(
@@ -66,18 +72,21 @@ export function GuestOrderPage({ tableId }: { tableId: string }) {
     if (!table || cart.length === 0) return;
     setError(null);
     try {
-      await submitGuestOrder({
-        tableId: table.id,
-        tableLabel: table.label,
-        lines: cart,
-        note,
-      });
+      await submitGuestOrder(
+        {
+          tableId: table.id,
+          tableLabel: table.label,
+          lines: cart,
+          note,
+        },
+        companySlug ?? "",
+      );
       setDone(true);
       setCart([]);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Submit failed");
     }
-  }, [cart, note, table]);
+  }, [cart, companySlug, note, table]);
 
   if (loading) {
     return <p className="p-6 text-sm text-muted">Loading menu…</p>;

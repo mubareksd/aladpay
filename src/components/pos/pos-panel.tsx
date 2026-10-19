@@ -2,6 +2,7 @@
 
 import QRCode from "qrcode";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useAuth } from "@/hooks/use-auth";
 import { usePos } from "@/hooks/use-pos";
 import { useSavedAccounts } from "@/hooks/use-saved-accounts";
 import { ALAD_BANK_OPTIONS, bicToAladBank } from "@/lib/alad/bank-codes";
@@ -38,6 +39,8 @@ const TABLE_STATUS_LABEL: Record<TableStatus, string> = {
 };
 
 export function PosPanel() {
+  const { session, authRequired } = useAuth();
+  const companySlug = session?.activeCompany?.slug;
   const pos = usePos();
   const { accounts } = useSavedAccounts();
   const [tab, setTab] = useState<PosTab>("orders");
@@ -278,7 +281,12 @@ export function PosPanel() {
       ) : null}
 
       {guestQrTable ? (
-        <TableGuestQrModal table={guestQrTable} onClose={() => setGuestQrTable(null)} />
+        <TableGuestQrModal
+          table={guestQrTable}
+          companySlug={companySlug}
+          authRequired={authRequired}
+          onClose={() => setGuestQrTable(null)}
+        />
       ) : null}
 
       {tab === "menu" ? (
@@ -385,12 +393,25 @@ export function PosPanel() {
   );
 }
 
-function TableGuestQrModal({ table, onClose }: { table: PosTable; onClose: () => void }) {
+function TableGuestQrModal({
+  table,
+  companySlug,
+  authRequired,
+  onClose,
+}: {
+  table: PosTable;
+  companySlug: string | undefined;
+  authRequired: boolean;
+  onClose: () => void;
+}) {
   const [dataUrl, setDataUrl] = useState<string | null>(null);
   const guestUrl = useMemo(() => {
     if (typeof window === "undefined") return "";
+    if (authRequired && companySlug) {
+      return `${window.location.origin}/guest/${companySlug}/${table.id}`;
+    }
     return `${window.location.origin}/guest/${table.id}`;
-  }, [table.id]);
+  }, [authRequired, companySlug, table.id]);
 
   useEffect(() => {
     if (!guestUrl) return;

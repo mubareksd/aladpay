@@ -1,8 +1,12 @@
 import { NextResponse } from "next/server";
+import { requirePosAccess } from "@/lib/auth/guard";
 import { publishGuestMenu } from "@/lib/pos/server-store";
 import type { PublishedGuestMenu } from "@/lib/pos/types";
 
 export async function POST(request: Request) {
+  const gate = await requirePosAccess();
+  if (gate instanceof NextResponse) return gate;
+  const companyId = gate?.activeCompany?.id;
   let body: unknown;
   try {
     body = await request.json();
@@ -16,11 +20,19 @@ export async function POST(request: Request) {
   if (!Array.isArray(input.tables) || !Array.isArray(input.menuItems)) {
     return NextResponse.json({ error: "tables and menuItems required" }, { status: 422 });
   }
-  const published = await publishGuestMenu({
-    updatedAt: Date.now(),
-    venueName: String(input.venueName ?? "Restaurant"),
-    tables: input.tables,
-    menuItems: input.menuItems,
-  });
-  return NextResponse.json({ ok: true, published });
+  try {
+    const published = await publishGuestMenu(
+      {
+        updatedAt: Date.now(),
+        venueName: String(input.venueName ?? gate?.activeCompany?.name ?? "Restaurant"),
+        tables: input.tables,
+        menuItems: input.menuItems,
+      },
+      companyId,
+    );
+    return NextResponse.json({ ok: true, published });
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "Publish failed.";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
 }
