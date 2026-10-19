@@ -3,7 +3,7 @@ import { GuestOrderRoute } from "@/components/pos/guest-order-route";
 
 export const instant = false;
 
-export default function GuestCompanyTablePage() {
+export default function GuestOrderEntryPage() {
   return (
     <Suspense
       fallback={

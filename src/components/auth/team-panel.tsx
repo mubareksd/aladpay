@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { CompanyHub } from "@/components/auth/company-hub";
 import { useAuth } from "@/hooks/use-auth";
 import { btnPrimaryClass, btnSecondaryClass, fieldClass, panelClass } from "@/lib/ui-classes";
 import type { CompanyRole } from "@/lib/auth/types";
@@ -11,6 +12,14 @@ type Member = {
   name: string;
   role: CompanyRole;
   joinedAt: string;
+};
+
+type PendingInvite = {
+  id: string;
+  email: string;
+  role: "admin" | "employee";
+  expiresAt: string;
+  acceptUrl: string;
 };
 
 const ROLE_LABEL: Record<CompanyRole, string> = {
@@ -25,9 +34,13 @@ export function TeamPanel() {
   const canManage = company?.role === "owner" || company?.role === "admin";
 
   const [members, setMembers] = useState<Member[]>([]);
+  const [invites, setInvites] = useState<PendingInvite[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [showDirectAdd, setShowDirectAdd] = useState(false);
 
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteRole, setInviteRole] = useState<"employee" | "admin">("employee");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -37,14 +50,19 @@ export function TeamPanel() {
     if (!canManage) return;
     setLoading(true);
     setError(null);
-    const res = await fetch("/api/company/members", { credentials: "same-origin" });
-    const data = (await res.json()) as { members?: Member[]; error?: string };
-    if (!res.ok) {
-      setError(data.error ?? "Could not load team.");
+    const [membersRes, invitesRes] = await Promise.all([
+      fetch("/api/company/members", { credentials: "same-origin" }),
+      fetch("/api/company/invites", { credentials: "same-origin" }),
+    ]);
+    const membersData = (await membersRes.json()) as { members?: Member[]; error?: string };
+    const invitesData = (await invitesRes.json()) as { invites?: PendingInvite[] };
+    if (!membersRes.ok) {
+      setError(membersData.error ?? "Could not load team.");
       setMembers([]);
     } else {
-      setMembers(data.members ?? []);
+      setMembers(membersData.members ?? []);
     }
+    setInvites(invitesData.invites ?? []);
     setLoading(false);
   }, [canManage]);
 
@@ -61,50 +79,40 @@ export function TeamPanel() {
 
   if (!canManage) {
     return (
-      <div className={`${panelClass} space-y-2 text-sm`}>
-        <h2 className="font-medium text-foreground">{company.name}</h2>
-        <p className="text-muted">
-          You are signed in as {ROLE_LABEL[company.role]}. Contact an owner or admin to add
-          colleagues.
-        </p>
+      <div className="mt-6 space-y-4 md:mt-8">
+        <CompanyHub />
+        <div className={`${panelClass} space-y-2 text-sm`}>
+          <p className="text-muted">
+            You are signed in as {ROLE_LABEL[company.role]}. Contact an owner or admin to add
+            colleagues.
+          </p>
+        </div>
       </div>
     );
   }
 
   return (
     <div className="mt-6 space-y-4 md:mt-8">
+      <CompanyHub />
+
       <div className={`${panelClass} space-y-3`}>
-        <h2 className="text-sm font-medium text-foreground">Add employee</h2>
+        <h2 className="text-sm font-medium text-foreground">Invite teammate</h2>
         <p className="text-xs text-muted">
-          Create an account for a colleague. They sign in with the email and password you set and
-          get access to {company.name}.
+          Send an invite link (like Lubaak HMS). They choose a password or use an existing account.
         </p>
         <div className="grid gap-2 sm:grid-cols-2">
           <input
             className={fieldClass}
-            placeholder="Full name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-          />
-          <input
-            className={fieldClass}
             type="email"
             placeholder="Work email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-          />
-          <input
-            className={fieldClass}
-            type="password"
-            placeholder="Temporary password (min 8 chars)"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
+            value={inviteEmail}
+            onChange={(e) => setInviteEmail(e.target.value)}
           />
           {company.role === "owner" ? (
             <select
               className={fieldClass}
-              value={role}
-              onChange={(e) => setRole(e.target.value as "employee" | "admin")}
+              value={inviteRole}
+              onChange={(e) => setInviteRole(e.target.value as "employee" | "admin")}
             >
               <option value="employee">Employee</option>
               <option value="admin">Admin</option>
@@ -119,26 +127,137 @@ export function TeamPanel() {
           onClick={() => {
             void (async () => {
               setError(null);
-              const res = await fetch("/api/company/members", {
+              const res = await fetch("/api/company/invites", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 credentials: "same-origin",
-                body: JSON.stringify({ name, email, password, role }),
+                body: JSON.stringify({ email: inviteEmail, role: inviteRole }),
               });
-              const data = (await res.json()) as { error?: string };
+              const data = (await res.json()) as { error?: string; invite?: PendingInvite };
               if (!res.ok) {
-                setError(data.error ?? "Could not add member.");
+                setError(data.error ?? "Could not create invite.");
                 return;
               }
-              setName("");
-              setEmail("");
-              setPassword("");
+              setInviteEmail("");
               await load();
+              if (data.invite?.acceptUrl) {
+                try {
+                  await navigator.clipboard.writeText(data.invite.acceptUrl);
+                } catch {
+                  /* ignore */
+                }
+              }
             })();
           }}
         >
-          Add to team
+          Create invite link
         </button>
+        {invites.length > 0 ? (
+          <ul className="space-y-2 border-t border-border pt-3 text-xs">
+            {invites.map((inv) => (
+              <li key={inv.id} className="flex flex-wrap items-center justify-between gap-2">
+                <span>
+                  {inv.email} · {inv.role}
+                </span>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    className="text-brand hover:underline"
+                    onClick={() => void navigator.clipboard.writeText(inv.acceptUrl)}
+                  >
+                    Copy link
+                  </button>
+                  <button
+                    type="button"
+                    className="text-muted hover:text-red-900"
+                    onClick={() => {
+                      void (async () => {
+                        await fetch("/api/company/invites", {
+                          method: "DELETE",
+                          headers: { "Content-Type": "application/json" },
+                          credentials: "same-origin",
+                          body: JSON.stringify({ inviteId: inv.id }),
+                        });
+                        await load();
+                      })();
+                    }}
+                  >
+                    Revoke
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+
+        <button
+          type="button"
+          className="text-xs text-muted hover:text-foreground"
+          onClick={() => setShowDirectAdd((v) => !v)}
+        >
+          {showDirectAdd ? "Hide" : "Show"} direct add with password
+        </button>
+        {showDirectAdd ? (
+          <div className="grid gap-2 border-t border-border pt-3 sm:grid-cols-2">
+            <input
+              className={fieldClass}
+              placeholder="Full name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+            />
+            <input
+              className={fieldClass}
+              type="email"
+              placeholder="Work email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
+            <input
+              className={fieldClass}
+              type="password"
+              placeholder="Temporary password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+            {company.role === "owner" ? (
+              <select
+                className={fieldClass}
+                value={role}
+                onChange={(e) => setRole(e.target.value as "employee" | "admin")}
+              >
+                <option value="employee">Employee</option>
+                <option value="admin">Admin</option>
+              </select>
+            ) : null}
+            <button
+              type="button"
+              className={btnSecondaryClass + " !min-h-11"}
+              onClick={() => {
+                void (async () => {
+                  setError(null);
+                  const res = await fetch("/api/company/members", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    credentials: "same-origin",
+                    body: JSON.stringify({ name, email, password, role }),
+                  });
+                  const data = (await res.json()) as { error?: string };
+                  if (!res.ok) {
+                    setError(data.error ?? "Could not add member.");
+                    return;
+                  }
+                  setName("");
+                  setEmail("");
+                  setPassword("");
+                  await load();
+                })();
+              }}
+            >
+              Add directly
+            </button>
+          </div>
+        ) : null}
+
         {error ? (
           <p role="alert" className="text-sm text-red-900">
             {error}

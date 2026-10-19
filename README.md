@@ -50,6 +50,8 @@ When `DATABASE_URL` is set, the app requires sign-in:
 
 Roles: **owner** (full control), **admin** (team + operations), **employee** (POS and payments). Sessions are httpOnly cookies (14 days).
 
+**Team invites** (HMS-style): owners/admins create `/invites/{token}` links instead of sharing passwords. **Kitchen display**: open `/kds` on a tablet for a full-screen queue. **Health**: `GET /api/health` (database probe when configured).
+
 ## Docker
 
 ```bash

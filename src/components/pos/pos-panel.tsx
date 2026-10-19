@@ -459,7 +459,12 @@ function KitchenTab({
 }) {
   return (
     <div className={`${panelClass} space-y-3`}>
-      <h2 className="text-sm font-medium text-foreground">Kitchen queue</h2>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-sm font-medium text-foreground">Kitchen queue</h2>
+        <a href="/kds" className="text-xs text-brand hover:underline">
+          Open KDS fullscreen
+        </a>
+      </div>
       {orders.length === 0 ? (
         <p className="text-sm text-muted">Nothing in kitchen. Send open orders from Orders.</p>
       ) : (

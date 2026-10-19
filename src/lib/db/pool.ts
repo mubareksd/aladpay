@@ -97,6 +97,21 @@ export async function ensureDatabaseSchema(): Promise<void> {
 
           CREATE INDEX IF NOT EXISTS pos_guest_orders_pending_idx
             ON pos_guest_orders (company_id, acknowledged, created_at DESC);
+
+          CREATE TABLE IF NOT EXISTS company_invites (
+            id uuid PRIMARY KEY,
+            company_id uuid NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+            email text NOT NULL,
+            role text NOT NULL CHECK (role IN ('admin', 'employee')),
+            token text NOT NULL UNIQUE,
+            invited_by uuid REFERENCES users(id),
+            created_at timestamptz NOT NULL DEFAULT now(),
+            expires_at timestamptz NOT NULL,
+            accepted_at timestamptz
+          );
+
+          CREATE INDEX IF NOT EXISTS company_invites_company_idx
+            ON company_invites (company_id, created_at DESC);
         `);
       } finally {
         client.release();

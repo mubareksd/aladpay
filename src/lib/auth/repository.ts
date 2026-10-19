@@ -7,7 +7,7 @@ import type { AuthCompany, AuthUser, CompanyRole, SessionPayload } from "@/lib/a
 
 type UserRow = { id: string; email: string; name: string; password_hash: string };
 
-function normalizeEmail(email: string): string {
+export function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
 }
 
@@ -155,7 +155,7 @@ async function listCompaniesForUser(userId: string): Promise<AuthCompany[]> {
   }));
 }
 
-async function buildSessionPayload(
+export async function buildSessionPayload(
   userId: string,
   activeCompanyId: string | null,
 ): Promise<SessionPayload> {
