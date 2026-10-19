@@ -10,6 +10,8 @@ import {
   BANKS,
   buildPayload,
   formatTransactionAmount,
+  getAccountInputMeta,
+  usesWalletPhone,
   type Bank,
 } from "@/lib/ethiopian-bank-qr";
 import {
@@ -73,6 +75,26 @@ export function BankQrGenerator() {
   const selectedBankOption = useMemo(
     () => BANKS.find((b) => b.bic === form.bankBic),
     [form.bankBic],
+  );
+
+  const accountInput = useMemo(
+    () => getAccountInputMeta(selectedBankOption ?? BANKS[0]),
+    [selectedBankOption],
+  );
+
+  const isWallet = selectedBankOption ? usesWalletPhone(selectedBankOption) : false;
+
+  const pickBank = useCallback(
+    (bic: string) => {
+      const bank = BANKS.find((b) => b.bic === bic);
+      setForm((prev) => ({
+        ...prev,
+        bankBic: bic,
+        encoding: bank && usesWalletPhone(bank) ? "ips" : prev.encoding,
+      }));
+      setError(null);
+    },
+    [],
   );
 
   const pickerBanks = useMemo(() => {
@@ -165,9 +187,16 @@ export function BankQrGenerator() {
 
   const selectSavedAccount = useCallback(
     (account: SavedAccount) => {
+      const bank = BANKS.find((b) => b.bic === account.bankBic);
+      const fields = savedAccountToFormFields(account);
       setActiveSavedId(account.id);
       setSaveLabel(account.label);
-      setForm({ ...savedAccountToFormFields(account), amount: "", remark: "" });
+      setForm({
+        ...fields,
+        amount: "",
+        remark: "",
+        encoding: bank && usesWalletPhone(bank) ? "ips" : fields.encoding,
+      });
       clearPreview();
       setError(null);
     },
@@ -187,6 +216,7 @@ export function BankQrGenerator() {
           city: form.city,
           encoding: form.encoding,
           merchantGuid: form.merchantGuid,
+          accountType: BANKS.find((b) => b.bic === form.bankBic)?.accountType,
         },
         id,
         saveLabel || undefined,
@@ -346,7 +376,7 @@ export function BankQrGenerator() {
                             role="option"
                             aria-selected={selected}
                             onClick={() => {
-                              updateField("bankBic", bank.bic);
+                              pickBank(bank.bic);
                               setBankPickerOpen(false);
                               setBankPickerQuery("");
                             }}
@@ -372,16 +402,22 @@ export function BankQrGenerator() {
 
             <div>
               <label htmlFor="account" className="mb-1 block text-xs font-medium text-muted">
-                Account number
+                {accountInput.label}
               </label>
               <input
                 id="account"
                 required
+                type={isWallet ? "tel" : "text"}
+                inputMode={accountInput.inputMode}
                 value={form.account}
                 onChange={(e) => updateField("account", e.target.value)}
+                placeholder={accountInput.placeholder}
                 className={fieldClass}
-                autoComplete="off"
+                autoComplete={isWallet ? "tel" : "off"}
               />
+              {accountInput.hint ? (
+                <p className="mt-1 text-[11px] leading-relaxed text-muted">{accountInput.hint}</p>
+              ) : null}
             </div>
 
             <div>
@@ -429,32 +465,34 @@ export function BankQrGenerator() {
               </p>
             </div>
 
-            <div className="grid gap-4 md:grid-cols-2">
-              <div>
-                <label htmlFor="phone" className="mb-1 block text-xs font-medium text-muted">
-                  Phone
-                </label>
-                <input
-                  id="phone"
-                  type="tel"
-                  value={form.phone}
-                  onChange={(e) => updateField("phone", e.target.value)}
-                  placeholder="+251"
-                  className={fieldClass}
-                />
+            {isWallet ? null : (
+              <div className="grid gap-4 md:grid-cols-2">
+                <div>
+                  <label htmlFor="phone" className="mb-1 block text-xs font-medium text-muted">
+                    Phone
+                  </label>
+                  <input
+                    id="phone"
+                    type="tel"
+                    value={form.phone}
+                    onChange={(e) => updateField("phone", e.target.value)}
+                    placeholder="+251"
+                    className={fieldClass}
+                  />
+                </div>
+                <div>
+                  <label htmlFor="till" className="mb-1 block text-xs font-medium text-muted">
+                    Till number
+                  </label>
+                  <input
+                    id="till"
+                    value={form.till}
+                    onChange={(e) => updateField("till", e.target.value)}
+                    className={fieldClass}
+                  />
+                </div>
               </div>
-              <div>
-                <label htmlFor="till" className="mb-1 block text-xs font-medium text-muted">
-                  Till number
-                </label>
-                <input
-                  id="till"
-                  value={form.till}
-                  onChange={(e) => updateField("till", e.target.value)}
-                  className={fieldClass}
-                />
-              </div>
-            </div>
+            )}
 
             <div>
               <label htmlFor="city" className="mb-1 block text-xs font-medium text-muted">
@@ -475,17 +513,21 @@ export function BankQrGenerator() {
               <select
                 id="encoding"
                 value={form.encoding}
+                disabled={isWallet}
                 onChange={(e) =>
                   updateField("encoding", e.target.value as FormState["encoding"])
                 }
                 className={fieldClass}
               >
                 <option value="ips">IPS ET (national interoperable)</option>
-                <option value="legacy">Legacy (BIC + 0002246 prefix)</option>
+                <option value="legacy" disabled={isWallet}>
+                  Legacy (BIC + 0002246 prefix)
+                </option>
               </select>
               <p className="mt-1 text-[11px] leading-relaxed text-muted">
-                Use IPS ET for Dashen, Awash, and other banks on the national QR network. Try
-                legacy only if your bank gave you that older layout (some Abyssinia QRs).
+                {isWallet
+                  ? "Yaya Wallet uses IPS ET with your wallet phone in the account field."
+                  : "Use IPS ET for Dashen, Awash, and other banks on the national QR network. Try legacy only if your bank gave you that older layout (some Abyssinia QRs)."}
               </p>
             </div>
 
@@ -630,7 +672,7 @@ export function BankQrGenerator() {
                     <button
                       type="button"
                       onClick={() => {
-                        updateField("bankBic", bank.bic);
+                        pickBank(bank.bic);
                         setBankPickerOpen(false);
                       }}
                       className="flex min-h-12 w-full flex-col gap-2 px-3 py-3 text-left text-sm hover:bg-brand-soft active:bg-brand-soft sm:min-h-11 sm:flex-row sm:items-center sm:gap-3 sm:py-2.5"

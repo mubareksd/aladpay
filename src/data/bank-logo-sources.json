@@ -30,5 +30,6 @@
   { "bic": "DASHETAA", "name": "Dashen Bank S.C." },
   { "bic": "AWINETAA", "name": "Awash Bank S.C." },
   { "bic": "CBETETAA", "name": "Commercial Bank of Ethiopia" },
-  { "bic": "DEETETAA", "name": "Development Bank of Ethiopia" }
+  { "bic": "DEETETAA", "name": "Development Bank of Ethiopia" },
+  { "bic": "YAYAETAA", "name": "Yaya Wallet" }
 ]

@@ -1,8 +1,37 @@
+export type BankAccountType = "bank_account" | "wallet_phone";
+
 export type Bank = {
   name: string;
   bic: string;
   bankCode: string;
+  /** Wallets use tag 28-02 for the registered phone instead of a bank account. */
+  accountType?: BankAccountType;
 };
+
+export function usesWalletPhone(bank: Bank): boolean {
+  return bank.accountType === "wallet_phone";
+}
+
+export function getAccountInputMeta(bank: Bank): {
+  label: string;
+  placeholder: string;
+  inputMode: "text" | "tel";
+  hint?: string;
+} {
+  if (usesWalletPhone(bank)) {
+    return {
+      label: "Wallet phone number",
+      placeholder: "+251911234567",
+      inputMode: "tel",
+      hint: `${bank.name} uses your registered mobile number instead of a bank account.`,
+    };
+  }
+  return {
+    label: "Account number",
+    placeholder: "",
+    inputMode: "text",
+  };
+}
 
 export const BANKS: readonly Bank[] = [
   { name: "Siket Bank S.C", bic: "SSHCETAA", bankCode: "143" },
@@ -37,6 +66,18 @@ export const BANKS: readonly Bank[] = [
   { name: "Awash Bank S.C.", bic: "AWINETAA", bankCode: "878" },
   { name: "Commercial Bank of Ethiopia", bic: "CBETETAA", bankCode: "1936" },
   { name: "Development Bank of Ethiopia", bic: "DEETETAA", bankCode: "100" },
+  {
+    name: "Yaya Wallet",
+    bic: "YAYAETAA",
+    bankCode: "YAYA",
+    accountType: "wallet_phone",
+  },
+  {
+    name: "CBE Birr",
+    bic: "CBEBETAA",
+    bankCode: "CBEB",
+    accountType: "wallet_phone",
+  },
 ] as const;
 
 export function tlv(tag: string, value: string): string {
@@ -69,6 +110,18 @@ export function normalizePhone(phone: string | undefined | null): string {
   if (!phone) return "";
   const trimmed = phone.trim();
   return [...trimmed].filter((ch) => /\d/.test(ch) || ch === "+").join("");
+}
+
+/** Ethiopian mobile for wallet tag 28-02 (E.164 +2519xxxxxxxx). */
+export function normalizeWalletPhone(raw: string): string {
+  const compact = normalizePhone(raw).replace(/\s/g, "");
+  const digits = compact.startsWith("+") ? compact.slice(1) : compact;
+  if (/^2519\d{8}$/.test(digits)) return `+${digits}`;
+  if (/^09\d{8}$/.test(digits)) return `+251${digits.slice(1)}`;
+  if (/^9\d{8}$/.test(digits)) return `+251${digits}`;
+  throw new Error(
+    "Enter a valid Ethiopian mobile number for the wallet (e.g. +251911234567 or 0911234567).",
+  );
 }
 
 /** EMV QR tag 54. Omit when empty; value is a positive amount string (max 13 chars). */
@@ -165,16 +218,30 @@ export async function buildPayload(input: BuildPayloadInput): Promise<string> {
     encoding = "ips",
   } = input;
 
-  const account = rawAccount.trim();
+  const wallet = usesWalletPhone(bank);
+  let account = rawAccount.trim();
   const name = rawName.trim();
-  const normalizedPhone = normalizePhone(phone);
-  const tillValue = (till ?? "").trim();
+  let normalizedPhone = normalizePhone(phone);
+  const tillValue = wallet ? "" : (till ?? "").trim();
   const city = rawCity.trim().toUpperCase();
   const merchantCategory = rawCategory.trim();
   const amount = formatTransactionAmount(rawAmount);
   const remark = normalizeRemark(rawRemark);
 
-  if (!account) throw new Error("Account number is required.");
+  if (wallet) {
+    if (encoding === "legacy") {
+      throw new Error("Legacy QR format is not supported for Yaya Wallet. Use IPS ET.");
+    }
+    if (!account) throw new Error("Wallet phone number is required.");
+    account = normalizeWalletPhone(account);
+    normalizedPhone = "";
+  } else {
+    if (!account) throw new Error("Account number is required.");
+    if (account.length > 24) {
+      throw new Error("Account number must be at most 24 characters for IPS ET.");
+    }
+  }
+
   if (!name) throw new Error("Recipient/merchant name is required.");
   if (!bank.bic || bank.bic.length !== 8) {
     throw new Error(`Invalid BIC configured for ${bank.name}: ${JSON.stringify(bank.bic)}`);
@@ -183,7 +250,7 @@ export async function buildPayload(input: BuildPayloadInput): Promise<string> {
     throw new Error("Merchant category must be exactly four digits.");
   }
   if (account.length > 24) {
-    throw new Error("Account number must be at most 24 characters for IPS ET.");
+    throw new Error("Account identifier must be at most 24 characters for IPS ET.");
   }
 
   const merchantGuid =

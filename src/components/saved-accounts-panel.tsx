@@ -1,7 +1,7 @@
 "use client";
 
 import { BankLogo } from "@/components/bank-logo";
-import { BANKS } from "@/lib/ethiopian-bank-qr";
+import { BANKS, usesWalletPhone } from "@/lib/ethiopian-bank-qr";
 import type { SavedAccount } from "@/lib/saved-accounts";
 import { btnGhostClass, btnPrimaryClass, btnSecondaryClass, fieldClass, panelClass } from "@/lib/ui-classes";
 
@@ -47,6 +47,8 @@ export function SavedAccountsPanel({
         <ul className="divide-y divide-border border border-border">
           {accounts.map((account) => {
             const bank = BANKS.find((b) => b.bic === account.bankBic);
+            const wallet =
+              account.accountType === "wallet_phone" || (bank ? usesWalletPhone(bank) : false);
             const active = account.id === activeId;
             return (
               <li key={account.id} className={active ? "bg-brand-soft/60" : ""}>
@@ -67,6 +69,7 @@ export function SavedAccountsPanel({
                         {account.label}
                       </span>
                       <span className="mt-0.5 block break-all font-mono text-[11px] text-muted sm:text-xs">
+                        {wallet ? "Phone: " : ""}
                         {account.account}
                       </span>
                       {bank ? (

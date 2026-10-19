@@ -55,6 +55,7 @@ const SOURCES = {
     ethiopian: { dir: "commercial_bank_of_ethiopia", file: "commercial_bank_of_ethiopia.png" },
   },
   DEETETAA: { fayda: "dbe.png" },
+  YAYAETAA: {},
 };
 
 function resolveSource(bic, source) {

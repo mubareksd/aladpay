@@ -1,4 +1,4 @@
-import type { QrEncoding } from "@/lib/ethiopian-bank-qr";
+import type { BankAccountType, QrEncoding } from "@/lib/ethiopian-bank-qr";
 
 export type SavedAccount = {
   id: string;
@@ -11,6 +11,7 @@ export type SavedAccount = {
   city: string;
   encoding: QrEncoding;
   merchantGuid: string;
+  accountType?: BankAccountType;
   updatedAt: number;
 };
 
@@ -25,6 +26,7 @@ export type AccountFormFields = {
   city: string;
   encoding: QrEncoding;
   merchantGuid: string;
+  accountType?: BankAccountType;
 };
 
 export function defaultAccountLabel(name: string, account: string): string {
@@ -54,6 +56,7 @@ export function formFieldsToSavedAccount(
     city: fields.city.trim() || "ADDIS ABABA",
     encoding: fields.encoding,
     merchantGuid: fields.merchantGuid.trim(),
+    accountType: fields.accountType,
     updatedAt: Date.now(),
   };
 }
@@ -70,6 +73,7 @@ export function savedAccountToFormFields(
     city: saved.city,
     encoding: saved.encoding,
     merchantGuid: saved.merchantGuid,
+    accountType: saved.accountType,
   };
 }
 
@@ -98,7 +102,10 @@ function isSavedAccount(value: unknown): value is SavedAccount {
     typeof v.city === "string" &&
     (v.encoding === "ips" || v.encoding === "legacy") &&
     typeof v.merchantGuid === "string" &&
-    typeof v.updatedAt === "number"
+    typeof v.updatedAt === "number" &&
+    (v.accountType === undefined ||
+      v.accountType === "bank_account" ||
+      v.accountType === "wallet_phone")
   );
 }
 
