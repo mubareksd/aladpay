@@ -39,34 +39,24 @@ export function AladVerifyPanel({ defaults }: AladVerifyPanelProps) {
   const [mode, setMode] = useState<VerifyMode>("reference");
   const [url, setUrl] = useState("");
   const [reference, setReference] = useState("");
-  const [bank, setBank] = useState(defaults?.aladBank ?? "telebirr");
-  const [accountNumber, setAccountNumber] = useState(defaults?.senderAccount ?? "");
-  const [phone, setPhone] = useState(defaults?.walletPhone ?? "");
-  const [settlementAccount, setSettlementAccount] = useState(defaults?.settlementAccount ?? "");
-  const [expectedAmount, setExpectedAmount] = useState(defaults?.expectedAmount ?? "");
+  const [bank, setBank] = useState(() => defaults?.aladBank ?? "telebirr");
+  const [accountNumber, setAccountNumber] = useState(() => defaults?.senderAccount ?? "");
+  const [phone, setPhone] = useState(() => defaults?.walletPhone ?? "");
+  const [settlementAccount, setSettlementAccount] = useState(
+    () => defaults?.settlementAccount ?? "",
+  );
+  const [expectedAmount, setExpectedAmount] = useState(() => defaults?.expectedAmount ?? "");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<AladVerifyResponse | null>(null);
   const [retryAfter, setRetryAfter] = useState<string | null>(null);
 
   const [checkoutOpen, setCheckoutOpen] = useState(false);
-  const [checkoutAmount, setCheckoutAmount] = useState(defaults?.expectedAmount ?? "");
-  const [checkoutName, setCheckoutName] = useState(defaults?.accountName ?? "");
+  const [checkoutAmount, setCheckoutAmount] = useState(() => defaults?.expectedAmount ?? "");
+  const [checkoutName, setCheckoutName] = useState(() => defaults?.accountName ?? "");
   const [checkoutPhone, setCheckoutPhone] = useState("");
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [checkoutResult, setCheckoutResult] = useState<AladCheckoutCreateResponse | null>(null);
-
-  useEffect(() => {
-    if (defaults?.aladBank) setBank(defaults.aladBank);
-    if (defaults?.settlementAccount) setSettlementAccount(defaults.settlementAccount);
-    if (defaults?.expectedAmount) {
-      setExpectedAmount(defaults.expectedAmount);
-      setCheckoutAmount(defaults.expectedAmount);
-    }
-    if (defaults?.accountName) setCheckoutName(defaults.accountName);
-    if (defaults?.senderAccount) setAccountNumber(defaults.senderAccount);
-    if (defaults?.walletPhone) setPhone(defaults.walletPhone);
-  }, [defaults]);
 
   useEffect(() => {
     void fetch("/api/alad/verify")

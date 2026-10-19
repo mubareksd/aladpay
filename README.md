@@ -34,7 +34,10 @@ Generate Ethiopian bank and wallet payment QR codes from EMV-style TLV payloads 
 
 ## Environment
 
-- `NEXT_PUBLIC_SITE_URL` — canonical site URL for metadata (sitemap, Open Graph)
+- `NEXT_PUBLIC_SITE_URL` — canonical site URL for metadata (sitemap, Open Graph) and checkout redirect URLs
+- `ALAD_API_KEY` — server-only Bearer token for Alad verify and checkout ([dashboard](https://dashboard.alad.et/tokens)). Without it, the Verify tab shows setup instructions.
+
+Agent integration notes: [alad.et/agents.md](https://alad.et/agents.md) and [alad.et/llms.txt](https://alad.et/llms.txt).
 
 ## Docker
 
@@ -58,4 +61,4 @@ Logos are synced from [FaydaLink](https://github.com/motiabebe/FaydaLink) and [E
 
 ## Privacy
 
-Account numbers, names, and payloads never leave the browser unless you copy or download them.
+QR generation and payload decoding stay in the browser. **Verify payment** and **checkout** send receipt references, URLs, and settlement details to your server, which calls Alad with `ALAD_API_KEY`.

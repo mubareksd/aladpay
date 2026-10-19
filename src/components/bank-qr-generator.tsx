@@ -84,6 +84,25 @@ export function BankQrGenerator() {
     selectedBankOption &&
     bankHints[selectedBankOption.bic as keyof typeof bankHints];
 
+  const aladVerifyDefaults = useMemo(() => {
+    const bic = form.bankBic;
+    return {
+      aladBank: bicToAladBank(bic),
+      settlementAccount: form.account.trim(),
+      expectedAmount:
+        form.amountMode === "fixed" && form.amount.trim() ? form.amount.trim() : undefined,
+      accountName: form.name.trim() || undefined,
+      walletPhone: isWallet ? form.account.trim() : undefined,
+    };
+  }, [
+    form.account,
+    form.amount,
+    form.amountMode,
+    form.bankBic,
+    form.name,
+    isWallet,
+  ]);
+
   const pickerBanks = useMemo(
     () => sortBanksForPicker(BANKS, bankPickerQuery, favorites),
     [bankPickerQuery, favorites],
@@ -197,6 +216,15 @@ export function BankQrGenerator() {
               onQuickAmountChange={setQuickAmount}
               onMergeImport={mergeImported}
               onReplaceImport={replaceImported}
+            />
+          </div>
+        ) : null}
+
+        {activeSection === "verify" ? (
+          <div className="no-print mt-6 md:mt-8">
+            <AladVerifyPanel
+              key={`${form.bankBic}:${form.account}:${form.amountMode}:${form.amount}`}
+              defaults={aladVerifyDefaults}
             />
           </div>
         ) : null}
