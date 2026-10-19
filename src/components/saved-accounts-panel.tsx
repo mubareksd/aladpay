@@ -3,9 +3,7 @@
 import { BankLogo } from "@/components/bank-logo";
 import { BANKS } from "@/lib/ethiopian-bank-qr";
 import type { SavedAccount } from "@/lib/saved-accounts";
-
-const fieldClass =
-  "w-full rounded border border-border bg-surface px-3 py-2.5 text-sm text-foreground outline-none transition-colors focus:border-brand focus:ring-1 focus:ring-brand";
+import { btnGhostClass, btnPrimaryClass, btnSecondaryClass, fieldClass, panelClass } from "@/lib/ui-classes";
 
 type SavedAccountsPanelProps = {
   accounts: SavedAccount[];
@@ -35,14 +33,14 @@ export function SavedAccountsPanel({
   onQuickAmountChange,
 }: SavedAccountsPanelProps) {
   return (
-    <div className="space-y-3 border border-border bg-surface p-4 sm:p-5">
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h2 className="text-sm font-medium text-foreground">Saved accounts</h2>
-        <p className="text-[11px] text-muted">Stored only in this browser</p>
+    <div className={`space-y-4 ${panelClass}`}>
+      <div className="flex flex-col gap-1 sm:flex-row sm:flex-wrap sm:items-baseline sm:justify-between sm:gap-2">
+        <h2 className="text-sm font-medium text-foreground md:text-base">Saved accounts</h2>
+        <p className="text-[11px] text-muted sm:text-xs">Stored only in this browser</p>
       </div>
 
       {accounts.length === 0 ? (
-        <p className="text-sm text-muted">
+        <p className="text-sm leading-relaxed text-muted">
           Fill in the form below, then save an account to reuse it here.
         </p>
       ) : (
@@ -52,42 +50,51 @@ export function SavedAccountsPanel({
             const active = account.id === activeId;
             return (
               <li key={account.id} className={active ? "bg-brand-soft/60" : ""}>
-                <div className="flex flex-wrap items-center gap-3 p-3">
-                  {bank ? (
-                    <BankLogo bic={bank.bic} name={bank.name} size="sm" />
-                  ) : null}
-                  <button
-                    type="button"
-                    onClick={() => onSelect(account)}
-                    className="min-w-0 flex-1 text-left"
-                  >
-                    <span className="block truncate text-sm font-medium text-foreground">
-                      {account.label}
-                    </span>
-                    <span className="block font-mono text-[11px] text-muted">
-                      {account.account}
-                      {bank ? ` · ${bank.name}` : ""}
-                    </span>
-                  </button>
-                  <div className="flex flex-wrap gap-2">
+                <div className="flex flex-col gap-3 p-3 sm:flex-row sm:items-center sm:p-4">
+                  <div className="flex min-w-0 flex-1 items-start gap-3">
+                    {bank ? (
+                      <BankLogo bic={bank.bic} name={bank.name} size="md" className="sm:hidden" />
+                    ) : null}
+                    {bank ? (
+                      <BankLogo bic={bank.bic} name={bank.name} size="sm" className="hidden sm:block" />
+                    ) : null}
+                    <button
+                      type="button"
+                      onClick={() => onSelect(account)}
+                      className="min-w-0 flex-1 text-left"
+                    >
+                      <span className="block text-sm font-medium text-foreground sm:truncate">
+                        {account.label}
+                      </span>
+                      <span className="mt-0.5 block break-all font-mono text-[11px] text-muted sm:text-xs">
+                        {account.account}
+                      </span>
+                      {bank ? (
+                        <span className="mt-0.5 block text-[11px] text-muted sm:hidden">
+                          {bank.name}
+                        </span>
+                      ) : null}
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:justify-end">
                     <button
                       type="button"
                       onClick={() => onQuickQr(account, false)}
-                      className="rounded border border-border bg-background px-2.5 py-1 text-xs font-medium text-foreground hover:bg-brand-soft"
+                      className={`${btnSecondaryClass} col-span-2 !min-h-10 text-xs sm:col-span-1 sm:w-auto sm:px-3`}
                     >
                       QR, any amount
                     </button>
                     <button
                       type="button"
                       onClick={() => onQuickQr(account, true)}
-                      className="rounded bg-brand px-2.5 py-1 text-xs font-medium text-white hover:bg-brand-hover"
+                      className={`${btnPrimaryClass} col-span-2 !min-h-10 text-xs sm:col-span-1 sm:w-auto sm:px-3`}
                     >
                       QR with amount
                     </button>
                     <button
                       type="button"
                       onClick={() => onRemove(account.id)}
-                      className="rounded border border-border px-2.5 py-1 text-xs text-muted hover:bg-red-50 hover:text-red-900"
+                      className={`${btnGhostClass} col-span-2 border border-border text-xs text-muted sm:col-span-1 sm:w-auto sm:border-0 sm:px-2`}
                     >
                       Remove
                     </button>
@@ -99,8 +106,8 @@ export function SavedAccountsPanel({
         </ul>
       )}
 
-      <div className="grid gap-3 border-t border-border pt-3 sm:grid-cols-[1fr_auto_auto] sm:items-end">
-        <div>
+      <div className="grid gap-3 border-t border-border pt-4 md:grid-cols-[1fr_auto] md:items-end lg:grid-cols-[1fr_auto_auto]">
+        <div className="md:col-span-2 lg:col-span-1">
           <label htmlFor="save-label" className="mb-1 block text-xs font-medium text-muted">
             Label when saving
           </label>
@@ -112,28 +119,20 @@ export function SavedAccountsPanel({
             className={fieldClass}
           />
         </div>
-        <button
-          type="button"
-          onClick={onSave}
-          className="rounded border border-border bg-background px-4 py-2.5 text-sm font-medium text-foreground hover:bg-brand-soft"
-        >
+        <button type="button" onClick={onSave} className={`${btnSecondaryClass} md:w-auto md:min-w-[9rem]`}>
           Save account
         </button>
         {activeId ? (
-          <button
-            type="button"
-            onClick={onClearSelection}
-            className="rounded px-4 py-2.5 text-sm text-muted hover:text-foreground"
-          >
+          <button type="button" onClick={onClearSelection} className={`${btnGhostClass} md:w-auto`}>
             Clear selection
           </button>
         ) : null}
       </div>
 
-      <div className="grid gap-2 sm:grid-cols-[1fr_auto] sm:items-end">
+      <div className="grid gap-3 md:grid-cols-2 md:items-end lg:grid-cols-[1fr_1fr]">
         <div>
           <label htmlFor="quick-amount" className="mb-1 block text-xs font-medium text-muted">
-            Amount for &quot;QR with amount&quot; shortcuts (ETB)
+            Shortcut amount (ETB)
           </label>
           <input
             id="quick-amount"
@@ -144,9 +143,8 @@ export function SavedAccountsPanel({
             className={fieldClass}
           />
         </div>
-        <p className="text-[11px] leading-relaxed text-muted sm:pb-2">
-          Shortcuts use the saved profile and ignore the main form until you select an account
-          into the form.
+        <p className="text-[11px] leading-relaxed text-muted md:pb-2.5 lg:text-xs">
+          &quot;QR with amount&quot; uses this value plus the remark field in the main form.
         </p>
       </div>
     </div>

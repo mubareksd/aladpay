@@ -72,6 +72,16 @@ export function normalizePhone(phone: string | undefined | null): string {
 }
 
 /** EMV QR tag 54. Omit when empty; value is a positive amount string (max 13 chars). */
+/** NBE tag 80 / EMV 62-08 purpose; max 50 characters. */
+export function normalizeRemark(raw: string | undefined | null): string | null {
+  if (!raw?.trim()) return null;
+  const remark = raw.trim();
+  if (remark.length > 50) {
+    throw new Error("Remark must be at most 50 characters.");
+  }
+  return remark;
+}
+
 export function formatTransactionAmount(raw: string | undefined | null): string | null {
   if (!raw?.trim()) return null;
   const normalized = raw.trim().replace(/,/g, "");
@@ -103,6 +113,7 @@ export type BuildPayloadInput = {
   city?: string;
   merchantCategory?: string;
   amount?: string | null;
+  remark?: string | null;
   /** 32 hex chars (UUID without hyphens). Generated from bank + account when omitted. */
   merchantGuid?: string | null;
   encoding?: QrEncoding;
@@ -149,6 +160,7 @@ export async function buildPayload(input: BuildPayloadInput): Promise<string> {
     city: rawCity = "ADDIS ABABA",
     merchantCategory: rawCategory = "5700",
     amount: rawAmount,
+    remark: rawRemark,
     merchantGuid: rawMerchantGuid,
     encoding = "ips",
   } = input;
@@ -160,6 +172,7 @@ export async function buildPayload(input: BuildPayloadInput): Promise<string> {
   const city = rawCity.trim().toUpperCase();
   const merchantCategory = rawCategory.trim();
   const amount = formatTransactionAmount(rawAmount);
+  const remark = normalizeRemark(rawRemark);
 
   if (!account) throw new Error("Account number is required.");
   if (!name) throw new Error("Recipient/merchant name is required.");
@@ -188,6 +201,7 @@ export async function buildPayload(input: BuildPayloadInput): Promise<string> {
   let additional = "";
   if (normalizedPhone) additional += tlv("02", normalizedPhone);
   if (tillValue) additional += tlv("07", tillValue);
+  if (remark) additional += tlv("08", remark);
 
   const pointOfInitiation = amount ? "12" : "11";
 
@@ -203,6 +217,7 @@ export async function buildPayload(input: BuildPayloadInput): Promise<string> {
     tlv("60", city);
 
   if (additional) payload += tlv("62", additional);
+  if (remark) payload += tlv("80", remark);
 
   const crcInput = new TextEncoder().encode(payload + "6304");
   payload += "6304" + crc16CcittFalse(crcInput).toString(16).toUpperCase().padStart(4, "0");

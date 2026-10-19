@@ -17,15 +17,22 @@ import {
   savedAccountToFormFields,
   type SavedAccount,
 } from "@/lib/saved-accounts";
-
-const fieldClass =
-  "w-full rounded border border-border bg-surface px-3 py-2.5 text-sm text-foreground outline-none transition-colors focus:border-brand focus:ring-1 focus:ring-brand";
+import {
+  asideClass,
+  btnPrimaryClass,
+  btnSecondaryClass,
+  fieldClass,
+  mainGridClass,
+  pageContainerClass,
+  panelClass,
+} from "@/lib/ui-classes";
 
 type FormState = {
   bankBic: string;
   account: string;
   name: string;
   amount: string;
+  remark: string;
   phone: string;
   till: string;
   city: string;
@@ -38,6 +45,7 @@ const defaultForm: FormState = {
   account: "",
   name: "",
   amount: "",
+  remark: "",
   phone: "",
   till: "",
   city: "ADDIS ABABA",
@@ -56,6 +64,7 @@ export function BankQrGenerator() {
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [selectedBank, setSelectedBank] = useState<Bank | null>(null);
   const [amountInQr, setAmountInQr] = useState<string | null>(null);
+  const [remarkInQr, setRemarkInQr] = useState<string | null>(null);
   const [showBankList, setShowBankList] = useState(false);
   const [bankFilter, setBankFilter] = useState("");
   const [bankPickerOpen, setBankPickerOpen] = useState(false);
@@ -93,6 +102,7 @@ export function BankQrGenerator() {
     setQrDataUrl(null);
     setSelectedBank(null);
     setAmountInQr(null);
+    setRemarkInQr(null);
   }, []);
 
   const updateField = useCallback((key: keyof FormState, value: string) => {
@@ -120,6 +130,7 @@ export function BankQrGenerator() {
           till: fields.till || undefined,
           city: fields.city,
           amount: amountValue.trim() || undefined,
+          remark: fields.remark || undefined,
           encoding: fields.encoding,
           merchantGuid: fields.merchantGuid || undefined,
         });
@@ -134,6 +145,7 @@ export function BankQrGenerator() {
         setSelectedBank(bank);
         const formattedAmount = formatTransactionAmount(amountValue || undefined);
         setAmountInQr(formattedAmount ? `${formattedAmount} ETB` : null);
+        setRemarkInQr(fields.remark.trim() || null);
       } catch (e) {
         setError(e instanceof Error ? e.message : "Could not build the QR.");
       }
@@ -155,7 +167,7 @@ export function BankQrGenerator() {
     (account: SavedAccount) => {
       setActiveSavedId(account.id);
       setSaveLabel(account.label);
-      setForm({ ...savedAccountToFormFields(account), amount: "" });
+      setForm({ ...savedAccountToFormFields(account), amount: "", remark: "" });
       clearPreview();
       setError(null);
     },
@@ -195,13 +207,17 @@ export function BankQrGenerator() {
         setError('Set "Amount for QR with amount shortcuts" under saved accounts.');
         return;
       }
-      const fields: FormState = { ...savedAccountToFormFields(account), amount };
+      const fields: FormState = {
+        ...savedAccountToFormFields(account),
+        amount,
+        remark: form.remark,
+      };
       setActiveSavedId(account.id);
       setSaveLabel(account.label);
       setForm(fields);
       await runGenerate(fields, amount);
     },
-    [quickAmount, runGenerate],
+    [form.remark, quickAmount, runGenerate],
   );
 
   const clearSavedSelection = useCallback(() => {
@@ -228,25 +244,25 @@ export function BankQrGenerator() {
 
   return (
     <div className="min-h-full">
-      <div className="border-b border-border bg-surface">
-        <div className="mx-auto flex max-w-5xl items-baseline justify-between gap-4 px-4 py-4 sm:px-6">
-          <p className="text-sm font-semibold tracking-wide text-brand">AladPay</p>
-          <p className="text-xs text-muted">Ethiopia · ETB</p>
+      <div className="border-b border-border bg-surface pt-[env(safe-area-inset-top,0)]">
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3 sm:px-6 sm:py-4 lg:px-8">
+          <p className="text-sm font-semibold tracking-wide text-brand sm:text-base">AladPay</p>
+          <p className="text-xs text-muted sm:text-sm">Ethiopia · ETB</p>
         </div>
       </div>
 
-      <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-10">
-        <header className="max-w-xl">
-          <h1 className="text-2xl font-semibold text-foreground sm:text-[1.65rem]">
+      <div className={pageContainerClass}>
+        <header className="max-w-2xl">
+          <h1 className="text-xl font-semibold text-foreground sm:text-2xl md:text-[1.65rem]">
             Bank payment QR
           </h1>
-          <p className="mt-2 text-sm leading-relaxed text-muted">
+          <p className="mt-2 text-sm leading-relaxed text-muted md:text-[0.9375rem]">
             Static QR for receiving money. Amount is optional. Scan with the payer&apos;s bank app
             to confirm it works before you rely on it.
           </p>
         </header>
 
-        <div className="mt-8 space-y-6">
+        <div className="mt-6 md:mt-8">
           <SavedAccountsPanel
             accounts={accounts}
             activeId={activeSavedId}
@@ -265,9 +281,9 @@ export function BankQrGenerator() {
           />
         </div>
 
-        <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1.15fr)_minmax(260px,360px)] lg:gap-8">
+        <div className={mainGridClass}>
           <form
-            className="space-y-4 border border-border bg-surface p-5 sm:p-6"
+            className={`order-2 space-y-4 md:order-1 ${panelClass}`}
             onSubmit={(e) => {
               e.preventDefault();
               void generate();
@@ -283,7 +299,7 @@ export function BankQrGenerator() {
                 aria-labelledby="bank-label"
                 aria-expanded={bankPickerOpen}
                 onClick={() => setBankPickerOpen((open) => !open)}
-                className="flex w-full items-center gap-3 rounded border border-border bg-background px-3 py-2.5 text-left text-sm outline-none focus:border-brand focus:ring-1 focus:ring-brand"
+                className="flex min-h-11 w-full items-center gap-3 rounded border border-border bg-background px-3 py-2.5 text-left text-base outline-none focus:border-brand focus:ring-1 focus:ring-brand sm:min-h-0 sm:text-sm"
               >
                 {selectedBankOption ? (
                   <>
@@ -316,7 +332,11 @@ export function BankQrGenerator() {
                       autoFocus
                     />
                   </div>
-                  <ul className="max-h-52 overflow-y-auto" role="listbox" aria-label="Banks">
+                  <ul
+                    className="max-h-[min(50vh,14rem)] overflow-y-auto overscroll-contain sm:max-h-52"
+                    role="listbox"
+                    aria-label="Banks"
+                  >
                     {pickerBanks.map((bank) => {
                       const selected = bank.bic === form.bankBic;
                       return (
@@ -330,7 +350,7 @@ export function BankQrGenerator() {
                               setBankPickerOpen(false);
                               setBankPickerQuery("");
                             }}
-                            className={`flex w-full items-center gap-3 px-3 py-2 text-left text-sm hover:bg-brand-soft ${
+                            className={`flex min-h-11 w-full items-center gap-3 px-3 py-2.5 text-left text-sm hover:bg-brand-soft active:bg-brand-soft ${
                               selected ? "bg-brand-soft" : ""
                             }`}
                           >
@@ -392,7 +412,24 @@ export function BankQrGenerator() {
               />
             </div>
 
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label htmlFor="remark" className="mb-1 block text-xs font-medium text-muted">
+                Remark or reason
+              </label>
+              <input
+                id="remark"
+                value={form.remark}
+                onChange={(e) => updateField("remark", e.target.value)}
+                placeholder="e.g. Rent for March"
+                maxLength={50}
+                className={fieldClass}
+              />
+              <p className="mt-1 text-[11px] text-muted">
+                Shown to the payer when supported (NBE context tag 80 and purpose in tag 62).
+              </p>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
               <div>
                 <label htmlFor="phone" className="mb-1 block text-xs font-medium text-muted">
                   Phone
@@ -477,25 +514,18 @@ export function BankQrGenerator() {
               </p>
             ) : null}
 
-            <div className="grid gap-2 sm:grid-cols-2">
-              <button
-                type="button"
-                onClick={() => void generateOpenAmount()}
-                className="w-full rounded border border-border bg-background px-4 py-2.5 text-sm font-medium text-foreground hover:bg-brand-soft"
-              >
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <button type="button" onClick={() => void generateOpenAmount()} className={btnSecondaryClass}>
                 Create QR, any amount
               </button>
-              <button
-                type="submit"
-                className="w-full rounded bg-brand px-4 py-2.5 text-sm font-medium text-white hover:bg-brand-hover"
-              >
+              <button type="submit" className={btnPrimaryClass}>
                 Create QR{form.amount.trim() ? " with amount" : ""}
               </button>
             </div>
           </form>
 
-          <aside className="space-y-4 lg:sticky lg:top-6 lg:self-start">
-            <div className="border border-border bg-surface p-5">
+          <aside className={`order-1 md:order-2 ${asideClass}`}>
+            <div className={panelClass}>
               {selectedBankOption ? (
                 <div className="mb-4 flex items-center gap-3 pb-4 border-b border-border">
                   <BankLogo
@@ -513,7 +543,7 @@ export function BankQrGenerator() {
               ) : null}
 
               <p className="text-xs font-medium text-muted">Preview</p>
-              <div className="mt-3 flex min-h-[260px] items-center justify-center border border-dashed border-border bg-background p-4">
+              <div className="mt-3 flex min-h-[220px] items-center justify-center border border-dashed border-border bg-background p-3 sm:min-h-[260px] sm:p-4">
                 {qrDataUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
@@ -521,25 +551,21 @@ export function BankQrGenerator() {
                     alt="Payment QR code"
                     width={260}
                     height={260}
-                    className="max-w-full"
+                    className="h-auto w-full max-w-[min(100%,280px)]"
                   />
                 ) : (
                   <p className="text-center text-sm text-muted">No QR yet.</p>
                 )}
               </div>
               {qrDataUrl ? (
-                <button
-                  type="button"
-                  onClick={downloadPng}
-                  className="mt-3 w-full rounded border border-border bg-background px-4 py-2 text-sm font-medium text-foreground hover:bg-brand-soft"
-                >
+                <button type="button" onClick={downloadPng} className={`mt-3 ${btnSecondaryClass}`}>
                   Save as PNG
                 </button>
               ) : null}
             </div>
 
             {selectedBank && payload ? (
-              <div className="border border-border bg-surface p-5 text-sm">
+              <div className={`${panelClass} text-sm`}>
                 <dl className="space-y-2">
                   <div className="flex justify-between gap-4">
                     <dt className="text-muted">BIC</dt>
@@ -549,6 +575,12 @@ export function BankQrGenerator() {
                     <dt className="text-muted">Amount</dt>
                     <dd className="text-foreground">{amountInQr ?? "Any amount"}</dd>
                   </div>
+                  {remarkInQr ? (
+                    <div className="flex justify-between gap-4">
+                      <dt className="text-muted">Remark</dt>
+                      <dd className="max-w-[60%] text-right text-foreground">{remarkInQr}</dd>
+                    </div>
+                  ) : null}
                 </dl>
                 <div className="mt-4 border-t border-border pt-4">
                   <div className="mb-2 flex items-center justify-between">
@@ -570,20 +602,20 @@ export function BankQrGenerator() {
           </aside>
         </div>
 
-        <section className="mt-10 border-t border-border pt-8">
+        <section className="mt-8 border-t border-border pt-6 md:mt-10 md:pt-8">
           <button
             type="button"
             onClick={() => setShowBankList((v) => !v)}
-            className="flex w-full items-center justify-between gap-4 text-left"
+            className="flex min-h-11 w-full items-center justify-between gap-4 text-left active:opacity-80"
           >
-            <span className="text-sm font-medium text-foreground">
+            <span className="text-sm font-medium text-foreground md:text-base">
               All banks ({BANKS.length})
             </span>
             <span className="text-xs text-muted">{showBankList ? "Close" : "Open list"}</span>
           </button>
           {showBankList ? (
-            <div className="mt-3 border border-border bg-surface">
-              <div className="border-b border-border p-3">
+            <div className={`mt-3 ${panelClass} !p-0`}>
+              <div className="border-b border-border p-3 sm:p-4">
                 <input
                   type="search"
                   placeholder="Filter"
@@ -592,7 +624,7 @@ export function BankQrGenerator() {
                   className={fieldClass}
                 />
               </div>
-              <ul className="max-h-64 divide-y divide-border overflow-y-auto">
+              <ul className="max-h-[min(60vh,20rem)] divide-y divide-border overflow-y-auto overscroll-contain md:max-h-72">
                 {filteredBanks.map((bank) => (
                   <li key={bank.bic}>
                     <button
@@ -601,11 +633,13 @@ export function BankQrGenerator() {
                         updateField("bankBic", bank.bic);
                         setBankPickerOpen(false);
                       }}
-                      className="flex w-full items-center gap-3 px-3 py-2.5 text-left text-sm hover:bg-brand-soft"
+                      className="flex min-h-12 w-full flex-col gap-2 px-3 py-3 text-left text-sm hover:bg-brand-soft active:bg-brand-soft sm:min-h-11 sm:flex-row sm:items-center sm:gap-3 sm:py-2.5"
                     >
-                      <BankLogo bic={bank.bic} name={bank.name} size="sm" />
-                      <span className="min-w-0 flex-1 text-foreground">{bank.name}</span>
-                      <span className="font-mono text-[11px] text-muted">
+                      <div className="flex min-w-0 flex-1 items-center gap-3">
+                        <BankLogo bic={bank.bic} name={bank.name} size="sm" />
+                        <span className="min-w-0 flex-1 text-foreground">{bank.name}</span>
+                      </div>
+                      <span className="pl-10 font-mono text-[11px] text-muted sm:shrink-0 sm:pl-0 sm:text-xs">
                         {bank.bic}, code {bank.bankCode}
                       </span>
                     </button>
@@ -616,7 +650,7 @@ export function BankQrGenerator() {
           ) : null}
         </section>
 
-        <p className="mt-8 max-w-2xl text-[11px] leading-relaxed text-muted">
+        <p className="mt-6 max-w-2xl pb-6 text-[11px] leading-relaxed text-muted sm:mt-8 sm:pb-8 md:text-xs">
           QR layout matches a common Ethiopian TLV example; banks may interpret fields differently.
           Logos from{" "}
           <a
