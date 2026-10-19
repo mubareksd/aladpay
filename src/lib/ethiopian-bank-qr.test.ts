@@ -8,9 +8,10 @@ import {
   WALLET_MERCHANT_CATEGORY,
   YAYA_MERCHANT_CATEGORY,
 } from "@/lib/ethiopian-bank-qr";
+import { loadFixturePayload } from "@/lib/load-fixture";
 
-const CBE_BIRR_SAMPLE =
-  "000201010211284400122519381582140108CBEBETAA02122519381582145204482953032305802ET5919elias weldu rezakum6011Addis Ababa62340311Addis Ababa0811description100063043213";
+const CBE_BIRR_SAMPLE = loadFixturePayload("cbe-birr.txt");
+const YAYA_SAMPLE = loadFixturePayload("yaya-sample.txt");
 
 describe("tlv", () => {
   it("encodes short tags with two-digit length", () => {
@@ -40,6 +41,24 @@ describe("CBE Birr golden payload", () => {
 });
 
 describe("Yaya Wallet structure", () => {
+  it("supports yaya_app tag 62 length prefix", async () => {
+    const bank = BANKS.find((b) => b.bic === "YAYAETAA")!;
+    const payload = await buildPayload({
+      bank,
+      account: "0949909116",
+      name: "Test User",
+      city: "Addis Ababa",
+      yayaUsername: "testuser",
+      yayaRequestId: "687945bda-5a57-4543-9057-d7d461626a88",
+      yayaReferenceToken: "8863D452AA03",
+      yayaTag62Encoding: "yaya_app",
+      encoding: "ips",
+    });
+    expect(payload.includes("6212")).toBe(true);
+    expect(payload.includes("62123")).toBe(false);
+    expect(verifyPayloadCrc(payload).ok).toBe(true);
+  });
+
   it("builds IPS layout with deterministic tag 62 fields", async () => {
     const bank = BANKS.find((b) => b.bic === "YAYAETAA")!;
     const payload = await buildPayload({
@@ -69,9 +88,7 @@ describe("Yaya Wallet structure", () => {
   });
 
   it("decodes lenient tag 62 from app sample", () => {
-    const sample =
-      "00020101021228610032b34762cf0348408bb8710c043a463f290108YAYAETAA0209949909116520400005303230540510.245802ET5923Mengstab Ketemaw Abitew6028Woreda 06, Bole, Addis Ababa62122013687945bda-5a57-4543-9057-d7d461626a880214+251-9499091160416YAYAmengstabkete071288863D452AA030824Pay to YAYA:mengstabkete63045F25";
-    const parsed = parseEmvQrPayload(sample);
+    const parsed = parseEmvQrPayload(YAYA_SAMPLE);
     expect(parsed.bic).toBe("YAYAETAA");
     expect(parsed.account).toBe("949909116");
     expect(parsed.yayaUsername).toBe("mengstabkete");

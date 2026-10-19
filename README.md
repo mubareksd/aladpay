@@ -8,8 +8,10 @@ Generate Ethiopian bank and wallet payment QR codes from EMV-style TLV payloads 
 - Optional fixed amount or open amount (POI 11 / 12)
 - IPS ET with merchant GUID, or legacy BIC prefix for select banks
 - Saved accounts in `localStorage` (browser only, no server storage)
-- Paste a payload string to decode tags and fill the form
-- Export / import saved account backups (JSON)
+- Decode from **QR image upload** or pasted payload; apply fields or merchant GUID
+- **Favorite banks** in the picker; **live preview** with stale-request protection
+- **Yaya tag 62 compatibility** mode when the Yaya app rejects standard encoding
+- Export / import saved account backups (merge or replace)
 
 ## Requirements
 
@@ -24,6 +26,7 @@ Generate Ethiopian bank and wallet payment QR codes from EMV-style TLV payloads 
 | `npm start` | Run production server |
 | `npm run check` | Lint, typecheck, tests, and build |
 | `npm test` | Vitest unit tests |
+| `npm run test:e2e` | Playwright smoke test (builds and starts app) |
 | `npm run sync-logos` | Download bank logos into `public/banks/` |
 | `npm run sample-payloads` | Print sample IPS/legacy strings for a few banks |
 

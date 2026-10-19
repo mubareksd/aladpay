@@ -4,6 +4,7 @@ import { useCallback, useSyncExternalStore } from "react";
 import {
   getSavedAccountsClientSnapshot,
   getSavedAccountsServerSnapshot,
+  mergeAccountsDedupe,
   publishSavedAccounts,
   subscribeSavedAccounts,
   type SavedAccount,
@@ -38,10 +39,19 @@ export function useSavedAccounts() {
         id: crypto.randomUUID(),
         updatedAt: Date.now(),
       }));
-      publishSavedAccounts([...stamped, ...accounts].sort((a, b) => b.updatedAt - a.updatedAt));
+      publishSavedAccounts(mergeAccountsDedupe(accounts, stamped));
     },
     [accounts],
   );
 
-  return { accounts, ready: true, upsert, remove, mergeImported };
+  const replaceImported = useCallback((imported: SavedAccount[]) => {
+    const stamped = imported.map((item) => ({
+      ...item,
+      id: crypto.randomUUID(),
+      updatedAt: Date.now(),
+    }));
+    publishSavedAccounts(stamped.sort((a, b) => b.updatedAt - a.updatedAt));
+  }, []);
+
+  return { accounts, ready: true, upsert, remove, mergeImported, replaceImported };
 }

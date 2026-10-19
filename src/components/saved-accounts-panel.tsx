@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { BankLogo } from "@/components/bank-logo";
 import { BANKS, usesWalletPhone } from "@/lib/ethiopian-bank-qr";
 import {
@@ -22,7 +22,8 @@ type SavedAccountsPanelProps = {
   onQuickQr: (account: SavedAccount, withAmount: boolean) => void;
   quickAmount: string;
   onQuickAmountChange: (value: string) => void;
-  onImport: (accounts: SavedAccount[]) => void;
+  onMergeImport: (accounts: SavedAccount[]) => void;
+  onReplaceImport: (accounts: SavedAccount[]) => void;
 };
 
 export function SavedAccountsPanel({
@@ -37,15 +38,19 @@ export function SavedAccountsPanel({
   onQuickQr,
   quickAmount,
   onQuickAmountChange,
-  onImport,
+  onMergeImport,
+  onReplaceImport,
 }: SavedAccountsPanelProps) {
   const importRef = useRef<HTMLInputElement>(null);
+  const [importMode, setImportMode] = useState<"merge" | "replace">("merge");
 
   return (
     <div className={`space-y-4 ${panelClass}`}>
       <div className="flex flex-col gap-1 sm:flex-row sm:flex-wrap sm:items-baseline sm:justify-between sm:gap-2">
         <h2 className="text-sm font-medium text-foreground md:text-base">Saved accounts</h2>
-        <p className="text-[11px] text-muted sm:text-xs">Stored only in this browser</p>
+        <p className="text-[11px] text-muted sm:text-xs">
+          Stored only in this browser. Merge import skips duplicate bank + account rows.
+        </p>
       </div>
 
       {accounts.length === 0 ? (
@@ -160,6 +165,17 @@ export function SavedAccountsPanel({
         >
           Export backup
         </button>
+        <label className="flex items-center gap-2 text-xs text-muted">
+          <span>Import:</span>
+          <select
+            value={importMode}
+            onChange={(e) => setImportMode(e.target.value as "merge" | "replace")}
+            className="rounded border border-border bg-background px-2 py-1 text-xs text-foreground"
+          >
+            <option value="merge">Merge with existing</option>
+            <option value="replace">Replace all</option>
+          </select>
+        </label>
         <button
           type="button"
           onClick={() => importRef.current?.click()}
@@ -180,7 +196,17 @@ export function SavedAccountsPanel({
             reader.onload = () => {
               try {
                 const imported = importSavedAccountsJson(String(reader.result ?? ""));
-                onImport(imported);
+                if (importMode === "replace") {
+                  if (
+                    accounts.length > 0 &&
+                    !window.confirm("Replace all saved accounts with this backup?")
+                  ) {
+                    return;
+                  }
+                  onReplaceImport(imported);
+                } else {
+                  onMergeImport(imported);
+                }
               } catch (err) {
                 window.alert(err instanceof Error ? err.message : "Import failed.");
               }

@@ -122,37 +122,12 @@ export const WALLET_MERCHANT_CATEGORY = "4829";
 /** MCC on Yaya Wallet request-payment QRs (observed as 0000). */
 export const YAYA_MERCHANT_CATEGORY = "0000";
 
-export function tlv(tag: string, value: string): string {
-  if (tag.length !== 2 || !/^\d{2}$/.test(tag)) {
-    throw new Error(`Invalid TLV tag: ${JSON.stringify(tag)}`);
-  }
-  const length = value.length;
-  if (length > 999) {
-    throw new Error(`Value for tag ${tag} is too long (${length} characters)`);
-  }
-  if (length > 99) {
-    if (tag !== "62") {
-      throw new Error(`Value for tag ${tag} is too long (${length} characters)`);
-    }
-    return `${tag}${length.toString().padStart(3, "0")}${value}`;
-  }
-  return `${tag}${length.toString().padStart(2, "0")}${value}`;
-}
+/** How tag 62 is length-prefixed on Yaya Wallet QRs. */
+export type YayaTag62Encoding = "standard" | "yaya_app";
 
-export function crc16CcittFalse(data: Uint8Array): number {
-  let crc = 0xffff;
-  for (const byte of data) {
-    crc ^= byte << 8;
-    for (let i = 0; i < 8; i++) {
-      if (crc & 0x8000) {
-        crc = ((crc << 1) ^ 0x1021) & 0xffff;
-      } else {
-        crc = (crc << 1) & 0xffff;
-      }
-    }
-  }
-  return crc;
-}
+import { crc16CcittFalse, tlv, wrapTag62 } from "@/lib/tlv";
+
+export { crc16CcittFalse, tlv, wrapTag62 };
 
 export function normalizePhone(phone: string | undefined | null): string {
   if (!phone) return "";
@@ -304,6 +279,8 @@ export type BuildPayloadInput = {
   /** Test hooks for deterministic Yaya tag 62 fields. */
   yayaRequestId?: string | null;
   yayaReferenceToken?: string | null;
+  /** Use `yaya_app` if Yaya scanners reject standard 3-digit tag 62 length. */
+  yayaTag62Encoding?: YayaTag62Encoding;
 };
 
 /** 32 lowercase hex characters for IPS ET tag 28 sub-tag 00. */
@@ -358,6 +335,7 @@ export async function buildPayload(input: BuildPayloadInput): Promise<string> {
     yayaUsername: rawYayaUsername,
     yayaRequestId: rawYayaRequestId,
     yayaReferenceToken: rawYayaReferenceToken,
+    yayaTag62Encoding = "standard",
   } = input;
 
   const cbeWallet = isCbeBirrWallet(bank);
@@ -474,7 +452,13 @@ export async function buildPayload(input: BuildPayloadInput): Promise<string> {
     tlv("59", name) +
     tlv("60", city);
 
-  if (additional) payload += tlv("62", additional);
+  if (additional) {
+    if (yayaWallet && yayaTag62Encoding === "yaya_app") {
+      payload += wrapTag62(additional, { yayaAppCompat: true });
+    } else {
+      payload += tlv("62", additional);
+    }
+  }
   if (includeTag80 && remark) payload += tlv("80", remark);
 
   const crcInput = new TextEncoder().encode(payload + "6304");

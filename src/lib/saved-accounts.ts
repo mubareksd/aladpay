@@ -1,4 +1,8 @@
-import type { BankAccountType, QrEncoding } from "@/lib/ethiopian-bank-qr";
+import type {
+  BankAccountType,
+  QrEncoding,
+  YayaTag62Encoding,
+} from "@/lib/ethiopian-bank-qr";
 
 export type SavedAccount = {
   id: string;
@@ -13,6 +17,7 @@ export type SavedAccount = {
   merchantGuid: string;
   accountType?: BankAccountType;
   yayaUsername?: string;
+  yayaTag62Encoding?: YayaTag62Encoding;
   updatedAt: number;
 };
 
@@ -29,6 +34,7 @@ export type AccountFormFields = {
   merchantGuid: string;
   accountType?: BankAccountType;
   yayaUsername: string;
+  yayaTag62Encoding: YayaTag62Encoding;
 };
 
 export function defaultAccountLabel(name: string, account: string): string {
@@ -60,6 +66,8 @@ export function formFieldsToSavedAccount(
     merchantGuid: fields.merchantGuid.trim(),
     accountType: fields.accountType,
     yayaUsername: fields.yayaUsername.trim() || undefined,
+    yayaTag62Encoding:
+      fields.yayaTag62Encoding === "yaya_app" ? "yaya_app" : undefined,
     updatedAt: Date.now(),
   };
 }
@@ -80,6 +88,7 @@ export function savedAccountToFormFields(
     yayaUsername:
       saved.yayaUsername ??
       (saved.bankBic === "YAYAETAA" ? saved.till.trim().toLowerCase() : ""),
+    yayaTag62Encoding: saved.yayaTag62Encoding ?? "standard",
   };
 }
 
@@ -139,8 +148,24 @@ function isSavedAccount(value: unknown): value is SavedAccount {
     (v.accountType === undefined ||
       v.accountType === "bank_account" ||
       v.accountType === "wallet_phone") &&
-    (v.yayaUsername === undefined || typeof v.yayaUsername === "string")
+    (v.yayaUsername === undefined || typeof v.yayaUsername === "string") &&
+    (v.yayaTag62Encoding === undefined ||
+      v.yayaTag62Encoding === "standard" ||
+      v.yayaTag62Encoding === "yaya_app")
   );
+}
+
+export function accountDedupeKey(account: SavedAccount): string {
+  return `${account.bankBic}:${account.account.trim()}`;
+}
+
+export function mergeAccountsDedupe(
+  existing: SavedAccount[],
+  imported: SavedAccount[],
+): SavedAccount[] {
+  const keys = new Set(existing.map(accountDedupeKey));
+  const novel = imported.filter((item) => !keys.has(accountDedupeKey(item)));
+  return [...novel, ...existing].sort((a, b) => b.updatedAt - a.updatedAt);
 }
 
 const SERVER_SNAPSHOT: SavedAccount[] = [];
