@@ -1,23 +1,33 @@
 export type BankAccountType = "bank_account" | "wallet_phone";
 
+export type WalletKind = "cbe_birr" | "yaya";
+
 export type Bank = {
   name: string;
   bic: string;
   bankCode: string;
   /** Wallets use tag 28-02 for the registered phone instead of a bank account. */
   accountType?: BankAccountType;
+  walletKind?: WalletKind;
 };
 
 export function usesWalletPhone(bank: Bank): boolean {
   return bank.accountType === "wallet_phone";
 }
 
+export function getWalletKind(bank: Bank): WalletKind | null {
+  if (bank.walletKind) return bank.walletKind;
+  if (bank.bic === "YAYAETAA") return "yaya";
+  if (bank.bic === "CBEBETAA") return "cbe_birr";
+  return null;
+}
+
 export function isYayaWallet(bank: Bank): boolean {
-  return bank.bic === "YAYAETAA";
+  return getWalletKind(bank) === "yaya";
 }
 
 export function isCbeBirrWallet(bank: Bank): boolean {
-  return bank.bic === "CBEBETAA";
+  return getWalletKind(bank) === "cbe_birr";
 }
 
 export function getAccountInputMeta(bank: Bank): {
@@ -95,12 +105,14 @@ export const BANKS: readonly Bank[] = [
     bic: "YAYAETAA",
     bankCode: "YAYA",
     accountType: "wallet_phone",
+    walletKind: "yaya",
   },
   {
     name: "CBE Birr",
     bic: "CBEBETAA",
     bankCode: "CBEB",
     accountType: "wallet_phone",
+    walletKind: "cbe_birr",
   },
 ] as const;
 
@@ -205,16 +217,34 @@ function buildYayaAdditionalData(
   localPhone: string,
   username: string,
   remark: string | null,
+  requestId: string,
+  referenceToken: string,
 ): string {
-  const requestId = crypto.randomUUID();
   const payLine = remark?.trim() || `Pay to YAYA:${username}`;
   let additional = "";
   additional += tlv("20", requestId);
   additional += tlv("02", formatYayaTag62Phone(localPhone));
   additional += tlv("04", `YAYA${username}`);
-  additional += tlv("07", randomYayaReferenceToken());
+  additional += tlv("07", referenceToken);
   additional += tlv("08", payLine);
   return additional;
+}
+
+export function verifyPayloadCrc(payload: string): {
+  ok: boolean;
+  expected: string;
+  calculated: string;
+} {
+  if (payload.length < 8 || payload.slice(-8, -4) !== "6304") {
+    return { ok: false, expected: payload.slice(-4), calculated: "0000" };
+  }
+  const body = payload.slice(0, -4);
+  const expected = payload.slice(-4).toUpperCase();
+  const calculated = crc16CcittFalse(new TextEncoder().encode(body))
+    .toString(16)
+    .toUpperCase()
+    .padStart(4, "0");
+  return { ok: expected === calculated, expected, calculated };
 }
 
 function titleCaseCity(city: string): string {
@@ -269,6 +299,11 @@ export type BuildPayloadInput = {
   /** 32 hex chars (UUID without hyphens). Generated from bank + account when omitted. */
   merchantGuid?: string | null;
   encoding?: QrEncoding;
+  /** Yaya tag 62-04 / till field; required for Yaya Wallet. */
+  yayaUsername?: string | null;
+  /** Test hooks for deterministic Yaya tag 62 fields. */
+  yayaRequestId?: string | null;
+  yayaReferenceToken?: string | null;
 };
 
 /** 32 lowercase hex characters for IPS ET tag 28 sub-tag 00. */
@@ -320,6 +355,9 @@ export async function buildPayload(input: BuildPayloadInput): Promise<string> {
     remark: rawRemark,
     merchantGuid: rawMerchantGuid,
     encoding = "ips",
+    yayaUsername: rawYayaUsername,
+    yayaRequestId: rawYayaRequestId,
+    yayaReferenceToken: rawYayaReferenceToken,
   } = input;
 
   const cbeWallet = isCbeBirrWallet(bank);
@@ -359,9 +397,14 @@ export async function buildPayload(input: BuildPayloadInput): Promise<string> {
     const localPhone = yayaLocalPhoneDigits(account);
     account = localPhone;
     city = rawCity.trim();
-    const username = normalizeYayaUsername(till);
+    const username = normalizeYayaUsername(rawYayaUsername ?? till);
     if (!username) {
       throw new Error("Yaya username is required (your handle in the Yaya app, e.g. mengstabkete).");
+    }
+    const requestId = rawYayaRequestId?.trim() || crypto.randomUUID();
+    const referenceToken = rawYayaReferenceToken?.trim() || randomYayaReferenceToken();
+    if (referenceToken.length !== 12) {
+      throw new Error("Yaya reference token must be 12 characters.");
     }
     merchantCategory =
       !rawCategory.trim() || rawCategory.trim() === "5700"
@@ -372,7 +415,13 @@ export async function buildPayload(input: BuildPayloadInput): Promise<string> {
       (await deriveMerchantGuid(bank.bic, localPhone));
     merchantAccount =
       tlv("00", merchantGuid) + tlv("01", bank.bic) + tlv("02", localPhone);
-    yayaAdditional = buildYayaAdditionalData(localPhone, username, remark);
+    yayaAdditional = buildYayaAdditionalData(
+      localPhone,
+      username,
+      remark,
+      requestId,
+      referenceToken,
+    );
     normalizedPhone = "";
     includeTag80 = false;
   } else {

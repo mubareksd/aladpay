@@ -31,5 +31,17 @@ export function useSavedAccounts() {
     [accounts],
   );
 
-  return { accounts, ready: true, upsert, remove };
+  const mergeImported = useCallback(
+    (imported: SavedAccount[]) => {
+      const stamped = imported.map((item) => ({
+        ...item,
+        id: crypto.randomUUID(),
+        updatedAt: Date.now(),
+      }));
+      publishSavedAccounts([...stamped, ...accounts].sort((a, b) => b.updatedAt - a.updatedAt));
+    },
+    [accounts],
+  );
+
+  return { accounts, ready: true, upsert, remove, mergeImported };
 }

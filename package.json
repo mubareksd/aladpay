@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint src",
     "typecheck": "tsc --noEmit",
-    "check": "npm run lint && npm run typecheck && npm run build",
+    "test": "vitest run",
+    "check": "npm run lint && npm run typecheck && npm run test && npm run build",
     "sync-logos": "node scripts/sync-bank-logos.mjs",
     "sample-payloads": "tsx scripts/sample-payloads.mjs"
   },
@@ -30,6 +31,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.4.2",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^3.2.4"
   }
 }

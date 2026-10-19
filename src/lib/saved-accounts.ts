@@ -12,6 +12,7 @@ export type SavedAccount = {
   encoding: QrEncoding;
   merchantGuid: string;
   accountType?: BankAccountType;
+  yayaUsername?: string;
   updatedAt: number;
 };
 
@@ -27,6 +28,7 @@ export type AccountFormFields = {
   encoding: QrEncoding;
   merchantGuid: string;
   accountType?: BankAccountType;
+  yayaUsername: string;
 };
 
 export function defaultAccountLabel(name: string, account: string): string {
@@ -57,6 +59,7 @@ export function formFieldsToSavedAccount(
     encoding: fields.encoding,
     merchantGuid: fields.merchantGuid.trim(),
     accountType: fields.accountType,
+    yayaUsername: fields.yayaUsername.trim() || undefined,
     updatedAt: Date.now(),
   };
 }
@@ -74,6 +77,9 @@ export function savedAccountToFormFields(
     encoding: saved.encoding,
     merchantGuid: saved.merchantGuid,
     accountType: saved.accountType,
+    yayaUsername:
+      saved.yayaUsername ??
+      (saved.bankBic === "YAYAETAA" ? saved.till.trim().toLowerCase() : ""),
   };
 }
 
@@ -82,10 +88,37 @@ export function parseSavedAccounts(raw: string | null): SavedAccount[] {
   try {
     const data = JSON.parse(raw) as unknown;
     if (!Array.isArray(data)) return [];
-    return data.filter(isSavedAccount);
+    return data.filter(isSavedAccount).map(migrateSavedAccount);
   } catch {
     return [];
   }
+}
+
+function migrateSavedAccount(account: SavedAccount): SavedAccount {
+  if (account.bankBic === "YAYAETAA" && !account.yayaUsername && account.till.trim()) {
+    return { ...account, yayaUsername: account.till.trim().toLowerCase() };
+  }
+  return account;
+}
+
+export function exportSavedAccountsJson(accounts: SavedAccount[]): string {
+  return JSON.stringify({ version: 1, exportedAt: new Date().toISOString(), accounts }, null, 2);
+}
+
+export function importSavedAccountsJson(raw: string): SavedAccount[] {
+  const data = JSON.parse(raw) as unknown;
+  if (!data || typeof data !== "object") {
+    throw new Error("Invalid backup file.");
+  }
+  const accounts = (data as { accounts?: unknown }).accounts;
+  if (!Array.isArray(accounts)) {
+    throw new Error("Backup must contain an accounts array.");
+  }
+  const parsed = accounts.filter(isSavedAccount).map(migrateSavedAccount);
+  if (parsed.length === 0) {
+    throw new Error("No valid accounts found in backup.");
+  }
+  return parsed;
 }
 
 function isSavedAccount(value: unknown): value is SavedAccount {
@@ -105,7 +138,8 @@ function isSavedAccount(value: unknown): value is SavedAccount {
     typeof v.updatedAt === "number" &&
     (v.accountType === undefined ||
       v.accountType === "bank_account" ||
-      v.accountType === "wallet_phone")
+      v.accountType === "wallet_phone") &&
+    (v.yayaUsername === undefined || typeof v.yayaUsername === "string")
   );
 }
 

@@ -1,36 +1,56 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# AladPay
 
-## Getting Started
+Generate Ethiopian bank and wallet payment QR codes from EMV-style TLV payloads (IPS ET and legacy layouts).
 
-First, run the development server:
+## Features
+
+- 32 banks plus **CBE Birr** and **Yaya Wallet** (wallet-specific QR layouts)
+- Optional fixed amount or open amount (POI 11 / 12)
+- IPS ET with merchant GUID, or legacy BIC prefix for select banks
+- Saved accounts in `localStorage` (browser only, no server storage)
+- Paste a payload string to decode tags and fill the form
+- Export / import saved account backups (JSON)
+
+## Requirements
+
+- Node.js 20+
+
+## Scripts
+
+| Command | Description |
+|---------|-------------|
+| `npm run dev` | Local dev server |
+| `npm run build` | Production build (standalone output) |
+| `npm start` | Run production server |
+| `npm run check` | Lint, typecheck, tests, and build |
+| `npm test` | Vitest unit tests |
+| `npm run sync-logos` | Download bank logos into `public/banks/` |
+| `npm run sample-payloads` | Print sample IPS/legacy strings for a few banks |
+
+## Environment
+
+- `NEXT_PUBLIC_SITE_URL` — canonical site URL for metadata (sitemap, Open Graph)
+
+## Docker
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+docker build -t aladpay .
+docker run -p 3000:3000 -e NEXT_PUBLIC_SITE_URL=https://your.domain aladpay
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## QR standards
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+| Type | Notes |
+|------|--------|
+| **Banks (IPS)** | Tag 28: GUID + BIC + account. Optional tag 80 for remark. |
+| **Legacy** | Tag 28-00: `BIC + 0002246`. Some Abyssinia QRs use this. |
+| **CBE Birr** | Phone in tag 28-00/02, MCC 4829, tag 62 city + remark + empty `10`. |
+| **Yaya Wallet** | GUID in tag 28-00, 9-digit phone in tag 28-02, MCC 0000, Yaya tag 62 block. Paste GUID from a working Yaya QR if derived GUID fails. |
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Logos
 
-## Learn More
+Logos are synced from [FaydaLink](https://github.com/motiabebe/FaydaLink) and [EthiopianLogos](https://github.com/Chapa-Et/ethiopianlogos). Run `npm run sync-logos` after adding banks.
 
-To learn more about Next.js, take a look at the following resources:
+## Privacy
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Account numbers, names, and payloads never leave the browser unless you copy or download them.

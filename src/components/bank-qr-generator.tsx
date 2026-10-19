@@ -1,9 +1,11 @@
 "use client";
 
 import QRCode from "qrcode";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { sortBanksForPicker } from "@/lib/bank-list";
 import { BankLogo } from "@/components/bank-logo";
 import { ChevronDown } from "@/components/chevron-down";
+import { PayloadDecoderPanel } from "@/components/payload-decoder-panel";
 import { SavedAccountsPanel } from "@/components/saved-accounts-panel";
 import { useSavedAccounts } from "@/hooks/use-saved-accounts";
 import {
@@ -15,6 +17,7 @@ import {
   usesWalletPhone,
   type Bank,
 } from "@/lib/ethiopian-bank-qr";
+import type { PayloadFormHints } from "@/lib/emv-qr-parse";
 import {
   formFieldsToSavedAccount,
   savedAccountToFormFields,
@@ -41,6 +44,7 @@ type FormState = {
   city: string;
   encoding: "ips" | "legacy";
   merchantGuid: string;
+  yayaUsername: string;
 };
 
 const defaultForm: FormState = {
@@ -54,10 +58,11 @@ const defaultForm: FormState = {
   city: "ADDIS ABABA",
   encoding: "ips",
   merchantGuid: "",
+  yayaUsername: "",
 };
 
 export function BankQrGenerator() {
-  const { accounts, upsert, remove } = useSavedAccounts();
+  const { accounts, upsert, remove, mergeImported } = useSavedAccounts();
   const [form, setForm] = useState<FormState>(defaultForm);
   const [activeSavedId, setActiveSavedId] = useState<string | null>(null);
   const [saveLabel, setSaveLabel] = useState("");
@@ -68,6 +73,8 @@ export function BankQrGenerator() {
   const [selectedBank, setSelectedBank] = useState<Bank | null>(null);
   const [amountInQr, setAmountInQr] = useState<string | null>(null);
   const [remarkInQr, setRemarkInQr] = useState<string | null>(null);
+  const [poiInQr, setPoiInQr] = useState<string | null>(null);
+  const [livePreview, setLivePreview] = useState(true);
   const [showBankList, setShowBankList] = useState(false);
   const [bankFilter, setBankFilter] = useState("");
   const [bankPickerOpen, setBankPickerOpen] = useState(false);
@@ -99,27 +106,25 @@ export function BankQrGenerator() {
     [],
   );
 
-  const pickerBanks = useMemo(() => {
-    const q = bankPickerQuery.trim().toLowerCase();
-    if (!q) return [...BANKS];
-    return BANKS.filter(
-      (b) =>
-        b.name.toLowerCase().includes(q) ||
-        b.bic.toLowerCase().includes(q) ||
-        b.bankCode.includes(q),
-    );
-  }, [bankPickerQuery]);
+  const filterBanks = useCallback((query: string) => {
+    const q = query.trim().toLowerCase();
+    const matched = q
+      ? BANKS.filter(
+          (b) =>
+            b.name.toLowerCase().includes(q) ||
+            b.bic.toLowerCase().includes(q) ||
+            b.bankCode.includes(q),
+        )
+      : [...BANKS];
+    return sortBanksForPicker(matched, query);
+  }, []);
 
-  const filteredBanks = useMemo(() => {
-    const q = bankFilter.trim().toLowerCase();
-    if (!q) return [...BANKS];
-    return BANKS.filter(
-      (b) =>
-        b.name.toLowerCase().includes(q) ||
-        b.bic.toLowerCase().includes(q) ||
-        b.bankCode.includes(q),
-    );
-  }, [bankFilter]);
+  const pickerBanks = useMemo(
+    () => filterBanks(bankPickerQuery),
+    [bankPickerQuery, filterBanks],
+  );
+
+  const filteredBanks = useMemo(() => filterBanks(bankFilter), [bankFilter, filterBanks]);
 
   const clearPreview = useCallback(() => {
     setPayload(null);
@@ -127,6 +132,7 @@ export function BankQrGenerator() {
     setSelectedBank(null);
     setAmountInQr(null);
     setRemarkInQr(null);
+    setPoiInQr(null);
   }, []);
 
   const updateField = useCallback((key: keyof FormState, value: string) => {
@@ -135,13 +141,16 @@ export function BankQrGenerator() {
   }, []);
 
   const runGenerate = useCallback(
-    async (fields: FormState, amountValue: string) => {
-      setError(null);
-      clearPreview();
+    async (fields: FormState, amountValue: string, options?: { clearFirst?: boolean }) => {
+      const clearFirst = options?.clearFirst !== false;
+      if (clearFirst) {
+        setError(null);
+        clearPreview();
+      }
 
       const bank = BANKS.find((b) => b.bic === fields.bankBic);
       if (!bank) {
-        setError("Pick a bank first.");
+        if (clearFirst) setError("Pick a bank first.");
         return;
       }
 
@@ -152,6 +161,7 @@ export function BankQrGenerator() {
           name: fields.name,
           phone: fields.phone || undefined,
           till: fields.till || undefined,
+          yayaUsername: fields.yayaUsername || undefined,
           city: fields.city,
           amount: amountValue.trim() || undefined,
           remark: fields.remark || undefined,
@@ -169,13 +179,45 @@ export function BankQrGenerator() {
         setSelectedBank(bank);
         const formattedAmount = formatTransactionAmount(amountValue || undefined);
         setAmountInQr(formattedAmount ? `${formattedAmount} ETB` : null);
+        setPoiInQr(formattedAmount ? "Fixed amount (POI 12)" : "Any amount (POI 11)");
         setRemarkInQr(fields.remark.trim() || null);
+        if (!clearFirst) setError(null);
       } catch (e) {
-        setError(e instanceof Error ? e.message : "Could not build the QR.");
+        if (clearFirst) {
+          setError(e instanceof Error ? e.message : "Could not build the QR.");
+        }
       }
     },
     [clearPreview],
   );
+
+  useEffect(() => {
+    if (!livePreview) return;
+    const bank = BANKS.find((b) => b.bic === form.bankBic);
+    if (!bank || !form.account.trim() || !form.name.trim()) return;
+    if (isYayaWallet(bank) && !form.yayaUsername.trim()) return;
+    const timer = window.setTimeout(() => {
+      void runGenerate(form, form.amount, { clearFirst: false });
+    }, 650);
+    return () => window.clearTimeout(timer);
+  }, [form, livePreview, runGenerate]);
+
+  const applyPayloadHints = useCallback((hints: PayloadFormHints | null) => {
+    if (!hints) return;
+    setForm((prev) => ({
+      ...prev,
+      bankBic: hints.bankBic,
+      account: hints.account,
+      name: hints.name,
+      amount: hints.amount,
+      remark: hints.remark,
+      city: hints.city,
+      merchantGuid: hints.merchantGuid,
+      yayaUsername: hints.yayaUsername,
+      encoding: hints.encoding,
+    }));
+    setError(null);
+  }, []);
 
   const generate = useCallback(async () => {
     await runGenerate(form, form.amount);
@@ -197,6 +239,7 @@ export function BankQrGenerator() {
         ...fields,
         amount: "",
         remark: "",
+        yayaUsername: fields.yayaUsername ?? "",
         encoding: bank && usesWalletPhone(bank) ? "ips" : fields.encoding,
       });
       clearPreview();
@@ -218,6 +261,7 @@ export function BankQrGenerator() {
           city: form.city,
           encoding: form.encoding,
           merchantGuid: form.merchantGuid,
+          yayaUsername: form.yayaUsername,
           accountType: BANKS.find((b) => b.bic === form.bankBic)?.accountType,
         },
         id,
@@ -239,8 +283,10 @@ export function BankQrGenerator() {
         setError('Set "Amount for QR with amount shortcuts" under saved accounts.');
         return;
       }
+      const savedFields = savedAccountToFormFields(account);
       const fields: FormState = {
-        ...savedAccountToFormFields(account),
+        ...savedFields,
+        yayaUsername: savedFields.yayaUsername ?? "",
         amount,
         remark: form.remark,
       };
@@ -310,8 +356,11 @@ export function BankQrGenerator() {
             onQuickQr={(account, withAmount) => void quickQrFromSaved(account, withAmount)}
             quickAmount={quickAmount}
             onQuickAmountChange={setQuickAmount}
+            onImport={mergeImported}
           />
         </div>
+
+        <PayloadDecoderPanel onApplyHints={applyPayloadHints} />
 
         <div className={mainGridClass}>
           <form
@@ -389,6 +438,11 @@ export function BankQrGenerator() {
                             <BankLogo bic={bank.bic} name={bank.name} size="sm" />
                             <span className="min-w-0 flex-1 truncate text-foreground">
                               {bank.name}
+                              {usesWalletPhone(bank) ? (
+                                <span className="ml-1.5 text-[10px] font-normal text-muted">
+                                  Wallet
+                                </span>
+                              ) : null}
                             </span>
                             <span className="shrink-0 font-mono text-[11px] text-muted">
                               {bank.bic}
@@ -473,13 +527,14 @@ export function BankQrGenerator() {
 
             {isYaya ? (
               <div>
-                <label htmlFor="till" className="mb-1 block text-xs font-medium text-muted">
+                <label htmlFor="yayaUsername" className="mb-1 block text-xs font-medium text-muted">
                   Yaya username
                 </label>
                 <input
-                  id="till"
-                  value={form.till}
-                  onChange={(e) => updateField("till", e.target.value)}
+                  id="yayaUsername"
+                  required
+                  value={form.yayaUsername}
+                  onChange={(e) => updateField("yayaUsername", e.target.value)}
                   placeholder="mengstabkete"
                   autoComplete="username"
                   className={fieldClass}
@@ -588,6 +643,16 @@ export function BankQrGenerator() {
               </p>
             ) : null}
 
+            <label className="flex items-center gap-2 text-xs text-muted">
+              <input
+                type="checkbox"
+                checked={livePreview}
+                onChange={(e) => setLivePreview(e.target.checked)}
+                className="size-3.5 accent-brand"
+              />
+              Update preview while typing
+            </label>
+
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               <button type="button" onClick={() => void generateOpenAmount()} className={btnSecondaryClass}>
                 Create QR, any amount
@@ -649,6 +714,12 @@ export function BankQrGenerator() {
                     <dt className="text-muted">Amount</dt>
                     <dd className="text-foreground">{amountInQr ?? "Any amount"}</dd>
                   </div>
+                  {poiInQr ? (
+                    <div className="flex justify-between gap-4">
+                      <dt className="text-muted">Mode</dt>
+                      <dd className="text-right text-foreground">{poiInQr}</dd>
+                    </div>
+                  ) : null}
                   {remarkInQr ? (
                     <div className="flex justify-between gap-4">
                       <dt className="text-muted">Remark</dt>

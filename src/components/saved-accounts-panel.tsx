@@ -1,8 +1,13 @@
 "use client";
 
+import { useRef } from "react";
 import { BankLogo } from "@/components/bank-logo";
 import { BANKS, usesWalletPhone } from "@/lib/ethiopian-bank-qr";
-import type { SavedAccount } from "@/lib/saved-accounts";
+import {
+  exportSavedAccountsJson,
+  importSavedAccountsJson,
+  type SavedAccount,
+} from "@/lib/saved-accounts";
 import { btnGhostClass, btnPrimaryClass, btnSecondaryClass, fieldClass, panelClass } from "@/lib/ui-classes";
 
 type SavedAccountsPanelProps = {
@@ -17,6 +22,7 @@ type SavedAccountsPanelProps = {
   onQuickQr: (account: SavedAccount, withAmount: boolean) => void;
   quickAmount: string;
   onQuickAmountChange: (value: string) => void;
+  onImport: (accounts: SavedAccount[]) => void;
 };
 
 export function SavedAccountsPanel({
@@ -31,7 +37,10 @@ export function SavedAccountsPanel({
   onQuickQr,
   quickAmount,
   onQuickAmountChange,
+  onImport,
 }: SavedAccountsPanelProps) {
+  const importRef = useRef<HTMLInputElement>(null);
+
   return (
     <div className={`space-y-4 ${panelClass}`}>
       <div className="flex flex-col gap-1 sm:flex-row sm:flex-wrap sm:items-baseline sm:justify-between sm:gap-2">
@@ -130,6 +139,55 @@ export function SavedAccountsPanel({
             Clear selection
           </button>
         ) : null}
+      </div>
+
+      <div className="flex flex-wrap gap-2 border-t border-border pt-4">
+        <button
+          type="button"
+          disabled={accounts.length === 0}
+          onClick={() => {
+            const blob = new Blob([exportSavedAccountsJson(accounts)], {
+              type: "application/json",
+            });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = "aladpay-accounts.json";
+            link.click();
+            URL.revokeObjectURL(url);
+          }}
+          className={`${btnSecondaryClass} text-xs`}
+        >
+          Export backup
+        </button>
+        <button
+          type="button"
+          onClick={() => importRef.current?.click()}
+          className={`${btnSecondaryClass} text-xs`}
+        >
+          Import backup
+        </button>
+        <input
+          ref={importRef}
+          type="file"
+          accept="application/json,.json"
+          className="hidden"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            e.target.value = "";
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = () => {
+              try {
+                const imported = importSavedAccountsJson(String(reader.result ?? ""));
+                onImport(imported);
+              } catch (err) {
+                window.alert(err instanceof Error ? err.message : "Import failed.");
+              }
+            };
+            reader.readAsText(file);
+          }}
+        />
       </div>
 
       <div className="grid gap-3 md:grid-cols-2 md:items-end lg:grid-cols-[1fr_1fr]">

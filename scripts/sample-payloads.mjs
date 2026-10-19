@@ -1,16 +1,4 @@
-import { buildPayload, BANKS, crc16CcittFalse } from "../src/lib/ethiopian-bank-qr.ts";
-
-function verifyCrc(payload) {
-  const crcTag = payload.slice(-8, -4);
-  if (crcTag !== "6304") throw new Error("missing CRC tag");
-  const body = payload.slice(0, -4);
-  const expected = payload.slice(-4);
-  const calc = crc16CcittFalse(new TextEncoder().encode(body))
-    .toString(16)
-    .toUpperCase()
-    .padStart(4, "0");
-  return { ok: expected === calc, expected, calc };
-}
+import { buildPayload, BANKS, verifyPayloadCrc } from "../src/lib/ethiopian-bank-qr.ts";
 
 const cases = [
   ["ABYSETAA", "146105677"],
@@ -33,7 +21,34 @@ for (const [bic, account] of cases) {
     encoding: "legacy",
   });
   console.log(`\n${bank.name} (${account})`);
-  console.log("IPS CRC", verifyCrc(ips));
+  console.log("IPS CRC", verifyPayloadCrc(ips));
   console.log("IPS", ips);
   console.log("legacy", legacy);
 }
+
+const cbe = BANKS.find((b) => b.bic === "CBEBETAA");
+const cbePayload = await buildPayload({
+  bank: cbe,
+  account: "251938158214",
+  name: "elias weldu rezakum",
+  city: "ADDIS ABABA",
+  remark: "description",
+  encoding: "ips",
+});
+console.log("\nCBE Birr CRC", verifyPayloadCrc(cbePayload));
+
+const yaya = BANKS.find((b) => b.bic === "YAYAETAA");
+const yayaPayload = await buildPayload({
+  bank: yaya,
+  account: "0949909116",
+  name: "Mengstab Ketemaw Abitew",
+  city: "Woreda 06, Bole, Addis Ababa",
+  amount: "10.24",
+  yayaUsername: "mengstabkete",
+  merchantGuid: "b34762cf0348408bb8710c043a463f29",
+  yayaRequestId: "687945bda-5a57-4543-9057-d7d461626a88",
+  yayaReferenceToken: "8863D452AA03",
+  encoding: "ips",
+});
+console.log("Yaya CRC", verifyPayloadCrc(yayaPayload));
+console.log("Yaya", yayaPayload);
