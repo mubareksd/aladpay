@@ -526,7 +526,7 @@ export function BankQrGenerator() {
               </select>
               <p className="mt-1 text-[11px] leading-relaxed text-muted">
                 {isWallet
-                  ? "Yaya Wallet uses IPS ET with your wallet phone in the account field."
+                  ? `${selectedBankOption?.name ?? "This wallet"} uses IPS ET with your wallet phone in the account field.`
                   : "Use IPS ET for Dashen, Awash, and other banks on the national QR network. Try legacy only if your bank gave you that older layout (some Abyssinia QRs)."}
               </p>
             </div>

@@ -230,7 +230,7 @@ export async function buildPayload(input: BuildPayloadInput): Promise<string> {
 
   if (wallet) {
     if (encoding === "legacy") {
-      throw new Error("Legacy QR format is not supported for Yaya Wallet. Use IPS ET.");
+      throw new Error(`Legacy QR format is not supported for ${bank.name}. Use IPS ET.`);
     }
     if (!account) throw new Error("Wallet phone number is required.");
     account = normalizeWalletPhone(account);

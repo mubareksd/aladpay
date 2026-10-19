@@ -56,6 +56,9 @@ const SOURCES = {
   },
   DEETETAA: { fayda: "dbe.png" },
   YAYAETAA: {},
+  CBEBETAA: {
+    ethiopian: { dir: "cbe_birr_normal", file: "cbe_birr_normal.png" },
+  },
 };
 
 function resolveSource(bic, source) {
