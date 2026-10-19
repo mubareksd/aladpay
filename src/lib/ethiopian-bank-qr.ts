@@ -80,6 +80,9 @@ export const BANKS: readonly Bank[] = [
   },
 ] as const;
 
+/** MCC used by CBE Birr / wallet QRs in the field (e.g. 4829). */
+export const WALLET_MERCHANT_CATEGORY = "4829";
+
 export function tlv(tag: string, value: string): string {
   if (tag.length !== 2 || !/^\d{2}$/.test(tag)) {
     throw new Error(`Invalid TLV tag: ${JSON.stringify(tag)}`);
@@ -112,19 +115,32 @@ export function normalizePhone(phone: string | undefined | null): string {
   return [...trimmed].filter((ch) => /\d/.test(ch) || ch === "+").join("");
 }
 
-/** Ethiopian mobile for wallet tag 28-02 (E.164 +2519xxxxxxxx). */
+/** Ethiopian mobile for display (E.164 +2519xxxxxxxx). */
 export function normalizeWalletPhone(raw: string): string {
+  return `+${walletPhoneDigitsForTlv(raw)}`;
+}
+
+/**
+ * Digits-only wallet id for tag 28 sub-tags 00 and 02 (e.g. 251938158214, no plus sign).
+ */
+export function walletPhoneDigitsForTlv(raw: string): string {
   const compact = normalizePhone(raw).replace(/\s/g, "");
   const digits = compact.startsWith("+") ? compact.slice(1) : compact;
-  if (/^2519\d{8}$/.test(digits)) return `+${digits}`;
-  if (/^09\d{8}$/.test(digits)) return `+251${digits.slice(1)}`;
-  if (/^9\d{8}$/.test(digits)) return `+251${digits}`;
+  if (/^2519\d{8}$/.test(digits)) return digits;
+  if (/^09\d{8}$/.test(digits)) return `251${digits.slice(1)}`;
+  if (/^9\d{8}$/.test(digits)) return `251${digits}`;
   throw new Error(
     "Enter a valid Ethiopian mobile number for the wallet (e.g. +251911234567 or 0911234567).",
   );
 }
 
-/** EMV QR tag 54. Omit when empty; value is a positive amount string (max 13 chars). */
+function titleCaseCity(city: string): string {
+  return city
+    .trim()
+    .toLowerCase()
+    .replace(/(^|\s)(\S)/g, (_, space: string, ch: string) => space + ch.toUpperCase());
+}
+
 /** NBE tag 80 / EMV 62-08 purpose; max 50 characters. */
 export function normalizeRemark(raw: string | undefined | null): string | null {
   if (!raw?.trim()) return null;
@@ -203,6 +219,11 @@ function buildMerchantAccountBlock(
   return tlv("00", merchantGuid) + tlv("01", bank.bic) + tlv("02", account);
 }
 
+/** CBE Birr / Yaya-style wallet: sub-tag 00 and 02 both hold 2519xxxxxxxx digits. */
+function buildWalletMerchantAccountBlock(bank: Bank, phoneDigits: string): string {
+  return tlv("00", phoneDigits) + tlv("01", bank.bic) + tlv("02", phoneDigits);
+}
+
 export async function buildPayload(input: BuildPayloadInput): Promise<string> {
   const {
     bank,
@@ -219,27 +240,44 @@ export async function buildPayload(input: BuildPayloadInput): Promise<string> {
   } = input;
 
   const wallet = usesWalletPhone(bank);
-  let account = rawAccount.trim();
   const name = rawName.trim();
   let normalizedPhone = normalizePhone(phone);
   const tillValue = wallet ? "" : (till ?? "").trim();
-  const city = rawCity.trim().toUpperCase();
-  const merchantCategory = rawCategory.trim();
+  let merchantCategory = rawCategory.trim();
   const amount = formatTransactionAmount(rawAmount);
   const remark = normalizeRemark(rawRemark);
+
+  let account = rawAccount.trim();
+  let city = rawCity.trim().toUpperCase();
+  let merchantAccount: string;
+  let includeTag80 = Boolean(remark);
 
   if (wallet) {
     if (encoding === "legacy") {
       throw new Error(`Legacy QR format is not supported for ${bank.name}. Use IPS ET.`);
     }
     if (!account) throw new Error("Wallet phone number is required.");
-    account = normalizeWalletPhone(account);
+    const phoneDigits = walletPhoneDigitsForTlv(account);
+    account = phoneDigits;
+    city = titleCaseCity(rawCity);
+    merchantCategory =
+      !rawCategory.trim() || rawCategory.trim() === "5700"
+        ? WALLET_MERCHANT_CATEGORY
+        : merchantCategory;
+    merchantAccount = buildWalletMerchantAccountBlock(bank, phoneDigits);
     normalizedPhone = "";
+    includeTag80 = false;
   } else {
     if (!account) throw new Error("Account number is required.");
     if (account.length > 24) {
       throw new Error("Account number must be at most 24 characters for IPS ET.");
     }
+    const merchantGuid =
+      encoding === "ips"
+        ? normalizeMerchantGuid(rawMerchantGuid) ??
+          (await deriveMerchantGuid(bank.bic, account))
+        : "";
+    merchantAccount = buildMerchantAccountBlock(bank, account, encoding, merchantGuid);
   }
 
   if (!name) throw new Error("Recipient/merchant name is required.");
@@ -253,22 +291,16 @@ export async function buildPayload(input: BuildPayloadInput): Promise<string> {
     throw new Error("Account identifier must be at most 24 characters for IPS ET.");
   }
 
-  const merchantGuid =
-    encoding === "ips"
-      ? normalizeMerchantGuid(rawMerchantGuid) ?? (await deriveMerchantGuid(bank.bic, account))
-      : "";
-
-  const merchantAccount = buildMerchantAccountBlock(
-    bank,
-    account,
-    encoding,
-    merchantGuid,
-  );
-
   let additional = "";
-  if (normalizedPhone) additional += tlv("02", normalizedPhone);
-  if (tillValue) additional += tlv("07", tillValue);
-  if (remark) additional += tlv("08", remark);
+  if (wallet) {
+    additional += tlv("03", city);
+    if (remark) additional += tlv("08", remark);
+    additional += tlv("10", "");
+  } else {
+    if (normalizedPhone) additional += tlv("02", normalizedPhone);
+    if (tillValue) additional += tlv("07", tillValue);
+    if (remark) additional += tlv("08", remark);
+  }
 
   const pointOfInitiation = amount ? "12" : "11";
 
@@ -284,7 +316,7 @@ export async function buildPayload(input: BuildPayloadInput): Promise<string> {
     tlv("60", city);
 
   if (additional) payload += tlv("62", additional);
-  if (remark) payload += tlv("80", remark);
+  if (includeTag80 && remark) payload += tlv("80", remark);
 
   const crcInput = new TextEncoder().encode(payload + "6304");
   payload += "6304" + crc16CcittFalse(crcInput).toString(16).toUpperCase().padStart(4, "0");

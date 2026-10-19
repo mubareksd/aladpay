@@ -461,7 +461,9 @@ export function BankQrGenerator() {
                 className={fieldClass}
               />
               <p className="mt-1 text-[11px] text-muted">
-                Shown to the payer when supported (NBE context tag 80 and purpose in tag 62).
+                {isWallet
+                  ? "Optional note encoded in tag 62 (purpose). Wallets do not use tag 80."
+                  : "Shown to the payer when supported (NBE context tag 80 and purpose in tag 62)."}
               </p>
             </div>
 
