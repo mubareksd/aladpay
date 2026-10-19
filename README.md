@@ -34,7 +34,11 @@ Generate Ethiopian bank and wallet payment QR codes for receiving money.
 
 - `NEXT_PUBLIC_SITE_URL` — public site URL (metadata and checkout redirects)
 - `ALAD_API_KEY` — server-only; enables Verify and checkout (see `.env.example`)
-- `POS_DATA_DIR` — optional; directory for guest menu and inbox JSON (default `.data/` in the app root). Mount a volume in Docker so guest orders survive restarts.
+- `DATABASE_URL` — optional PostgreSQL connection for guest menu and inbox (recommended in production). When unset, data is stored in `.data/pos-guest.json` (or `POS_DATA_DIR`).
+- `DATABASE_SSL` — `false`, `true` (allow self-signed), or `require` for verified TLS.
+- `POS_DATA_DIR` — file-store directory when `DATABASE_URL` is not set.
+
+Run `npm run db:check` after setting `DATABASE_URL` to verify connectivity and create POS tables.
 
 ## Docker
 
