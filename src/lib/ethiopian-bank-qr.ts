@@ -44,6 +44,14 @@ export function getAccountInputMeta(bank: Bank): {
       hint: "Use the mobile number registered on your Yaya wallet.",
     };
   }
+  if (bank.bic === "AWINETAA") {
+    return {
+      label: "Account number",
+      placeholder: "",
+      inputMode: "text",
+      hint: "Use the 13-digit Awash account. If your statement shows 15 digits starting with 01, omit that prefix.",
+    };
+  }
   if (isCbeBirrWallet(bank)) {
     return {
       label: "Wallet phone number",
@@ -124,6 +132,7 @@ export const YAYA_MERCHANT_CATEGORY = "0000";
 
 export { CBE_BIRR_MCC } from "@/lib/wallets/cbe-birr";
 export { YAYA_MCC } from "@/lib/wallets/yaya";
+import { normalizeIpsBankAccount } from "@/lib/bank-account-normalize";
 import { prepareCbeBirrWallet } from "@/lib/wallets/cbe-birr";
 import {
   prepareYayaWallet,
@@ -335,6 +344,7 @@ export async function buildPayload(input: BuildPayloadInput): Promise<string> {
     includeTag80 = false;
   } else {
     if (!account) throw new Error("Account number is required.");
+    account = normalizeIpsBankAccount(bank, account);
     if (account.length > 24) {
       throw new Error("Account number must be at most 24 characters for IPS ET.");
     }

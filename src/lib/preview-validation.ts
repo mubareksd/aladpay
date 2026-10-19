@@ -5,6 +5,7 @@ import {
   isYayaWallet,
   type Bank,
 } from "@/lib/ethiopian-bank-qr";
+import { normalizeIpsBankAccount } from "@/lib/bank-account-normalize";
 import { walletPhoneDigitsForTlv } from "@/lib/wallets/shared-phone";
 import { normalizeYayaUsername, yayaLocalPhoneDigits } from "@/lib/wallets/yaya";
 import type { PaymentQrFormState } from "@/lib/payment-form-state";
@@ -33,6 +34,11 @@ export function getPreviewBlockReason(
     }
     if (isCbeBirrWallet(bank) || isYayaWallet(bank)) {
       walletPhoneDigitsForTlv(form.account);
+    } else if (bank.bic === "AWINETAA") {
+      const normalized = normalizeIpsBankAccount(bank, form.account);
+      if (normalized.length !== 13) {
+        return "Awash account should be 13 digits (remove a leading 01 prefix if you have 15 digits).";
+      }
     }
     if (isYayaWallet(bank)) {
       normalizeYayaUsername(form.yayaUsername);
