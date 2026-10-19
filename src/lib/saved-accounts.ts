@@ -102,9 +102,27 @@ function isSavedAccount(value: unknown): value is SavedAccount {
   );
 }
 
+const SERVER_SNAPSHOT: SavedAccount[] = [];
+
+let clientSnapshot: SavedAccount[] = SERVER_SNAPSHOT;
+let clientSnapshotSerialized: string | null = null;
+
+function syncClientSnapshotFromStorage(): SavedAccount[] {
+  if (typeof window === "undefined") return SERVER_SNAPSHOT;
+  const raw = localStorage.getItem(SAVED_ACCOUNTS_STORAGE_KEY);
+  if (raw === clientSnapshotSerialized) return clientSnapshot;
+  clientSnapshotSerialized = raw;
+  clientSnapshot = parseSavedAccounts(raw);
+  return clientSnapshot;
+}
+
+function setClientSnapshot(accounts: SavedAccount[], serialized: string): void {
+  clientSnapshot = accounts;
+  clientSnapshotSerialized = serialized;
+}
+
 export function readSavedAccountsFromStorage(): SavedAccount[] {
-  if (typeof window === "undefined") return [];
-  return parseSavedAccounts(localStorage.getItem(SAVED_ACCOUNTS_STORAGE_KEY));
+  return syncClientSnapshotFromStorage();
 }
 
 export function writeSavedAccountsToStorage(accounts: SavedAccount[]): void {
@@ -114,19 +132,23 @@ export function writeSavedAccountsToStorage(accounts: SavedAccount[]): void {
 const listeners = new Set<() => void>();
 
 export function subscribeSavedAccounts(onStoreChange: () => void): () => void {
+  syncClientSnapshotFromStorage();
   listeners.add(onStoreChange);
   return () => listeners.delete(onStoreChange);
 }
 
+/** Must return the same reference until the store changes (useSyncExternalStore). */
 export function getSavedAccountsClientSnapshot(): SavedAccount[] {
-  return readSavedAccountsFromStorage();
+  return syncClientSnapshotFromStorage();
 }
 
 export function getSavedAccountsServerSnapshot(): SavedAccount[] {
-  return [];
+  return SERVER_SNAPSHOT;
 }
 
 export function publishSavedAccounts(accounts: SavedAccount[]): void {
-  writeSavedAccountsToStorage(accounts);
+  const serialized = JSON.stringify(accounts);
+  localStorage.setItem(SAVED_ACCOUNTS_STORAGE_KEY, serialized);
+  setClientSnapshot(accounts, serialized);
   listeners.forEach((listener) => listener());
 }
