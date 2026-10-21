@@ -35,7 +35,7 @@ Generate Ethiopian bank and wallet payment QR codes for receiving money.
 
 - `NEXT_PUBLIC_SITE_URL` — public site URL (metadata and checkout redirects)
 - `ALAD_API_KEY` — server-only; enables Verify and checkout (see `.env.example`)
-- `DATABASE_URL` — optional PostgreSQL connection for guest menu and inbox (recommended in production). When unset, data is stored in `.data/pos-guest.json` (or `POS_DATA_DIR`).
+- `DATABASE_URL` — optional MySQL connection (`mysql://…`) for auth, guest menu, and inbox (recommended in production). When unset, data is stored in `.data/pos-guest.json` (or `POS_DATA_DIR`).
 - `DATABASE_SSL` — `false`, `true` (allow self-signed), or `require` for verified TLS.
 - `POS_DATA_DIR` — file-store directory when `DATABASE_URL` is not set.
 
@@ -43,12 +43,13 @@ Run `npm run db:check` after setting `DATABASE_URL` to verify connectivity and c
 
 ### Netlify / serverless
 
-Serverless functions run on **Netlify’s network**, not on your VPS. If `DATABASE_URL` points at a **cPanel Postgres IP** (e.g. `91.x.x.x:5432`), you often get **`ETIMEDOUT`** because remote PostgreSQL is disabled or firewalled.
+Serverless functions run on **Netlify’s network**, not on your VPS. If `DATABASE_URL` points at a **cPanel MySQL IP** (e.g. `91.x.x.x:3306`), you often get **`ETIMEDOUT`** because remote MySQL is disabled or firewalled.
 
 **Fix (pick one):**
 
-1. **Cloud Postgres** (recommended) — [Neon](https://neon.tech), Supabase, or Railway. Set `DATABASE_URL` in Netlify → Site configuration → Environment variables. Redeploy. Check `GET https://your-site.netlify.app/api/health`.
-2. **Same-server hosting** — Deploy the Node app on the **same machine** that runs Postgres (Docker/VPS), not Netlify.
+1. **Cloud MySQL** — PlanetScale, Railway, or similar. Set `DATABASE_URL` in Netlify → Site configuration → Environment variables. Redeploy. Check `GET https://your-site.netlify.app/api/health`.
+2. **Same-server hosting** — Deploy the Node app on the **same machine** that runs MySQL (Docker/VPS), not Netlify.
+3. **Remote MySQL access** — In cPanel, add Netlify egress IPs under *Remote MySQL®* (fragile; cloud DB is easier).
 3. **Demo without auth** — Remove `DATABASE_URL` from Netlify so `/app` works without login (guest POS file mode only; no multi-tenant auth on server).
 
 After changing `DATABASE_URL`, trigger a new deploy. Registration errors return **503** with a short message when the database is unreachable (not raw driver text).

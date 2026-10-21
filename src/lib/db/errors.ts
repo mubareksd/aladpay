@@ -6,11 +6,11 @@ export function publicDatabaseError(error: unknown): { httpStatus: number; messa
     return {
       httpStatus: 503,
       message:
-        "Database is unreachable from this deployment. Use a cloud Postgres reachable from the internet (e.g. Neon or Supabase), or allow remote connections from your host.",
+        "Database is unreachable from this deployment. Allow remote MySQL from your host IP, use a cloud database, or run the app on the same server as the database.",
     };
   }
 
-  if (/password authentication failed|no pg_hba\.conf/i.test(msg)) {
+  if (/password authentication failed|Access denied for user|ER_ACCESS_DENIED/i.test(msg)) {
     return {
       httpStatus: 503,
       message: "Database credentials were rejected. Check DATABASE_URL on the server.",

@@ -1,4 +1,4 @@
-import { databaseConfigured, ensureDatabaseSchema, getPool } from "@/lib/db/pool";
+import { databaseConfigured, ensureDatabaseSchema, query } from "@/lib/db/pool";
 
 export type HealthCheck = {
   key: string;
@@ -43,7 +43,7 @@ export async function buildHealthSnapshot(): Promise<HealthSnapshot> {
     checks.push(
       await runCheck("database", "Database", async () => {
         await ensureDatabaseSchema();
-        await getPool().query("SELECT 1");
+        await query("SELECT 1");
         return "Connected";
       }),
     );

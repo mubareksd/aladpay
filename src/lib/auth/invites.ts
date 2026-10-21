@@ -1,5 +1,5 @@
 import { randomBytes } from "crypto";
-import { ensureDatabaseSchema, getPool } from "@/lib/db/pool";
+import { ensureDatabaseSchema, query, withTransaction } from "@/lib/db/pool";
 import { hashPassword, validatePasswordPolicy, verifyPassword } from "@/lib/auth/password";
 import { hashSessionToken, newSessionToken } from "@/lib/auth/session-token";
 import { SESSION_MAX_AGE_SEC } from "@/lib/auth/session-cookie";
@@ -36,16 +36,16 @@ export async function createCompanyInvite(input: {
   const expiresAt = new Date(Date.now() + INVITE_TTL_MS);
   const token = newInviteToken();
 
-  const pending = await getPool().query(
+  const pending = await query(
     `SELECT id FROM company_invites
-     WHERE company_id = $1 AND email = $2 AND accepted_at IS NULL AND expires_at > now()`,
+     WHERE company_id = $1 AND email = $2 AND accepted_at IS NULL AND expires_at > NOW()`,
     [input.companyId, email],
   );
   if (pending.rowCount) {
     throw new Error("An invite is already pending for this email.");
   }
 
-  const member = await getPool().query(
+  const member = await query(
     `SELECT 1 FROM company_members m JOIN users u ON u.id = m.user_id
      WHERE m.company_id = $1 AND u.email = $2`,
     [input.companyId, email],
@@ -55,10 +55,10 @@ export async function createCompanyInvite(input: {
   }
 
   const id = crypto.randomUUID();
-  await getPool().query(
+  await query(
     `INSERT INTO company_invites (id, company_id, email, role, token, invited_by, expires_at)
      VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-    [id, input.companyId, email, input.role, token, input.invitedBy, expiresAt.toISOString()],
+    [id, input.companyId, email, input.role, token, input.invitedBy, expiresAt],
   );
   const invites = await listCompanyInvites(input.companyId);
   const created = invites.find((i) => i.id === id);
@@ -68,7 +68,7 @@ export async function createCompanyInvite(input: {
 
 export async function listCompanyInvites(companyId: string): Promise<CompanyInvite[]> {
   await ensureDatabaseSchema();
-  const result = await getPool().query<{
+  const result = await query<{
     id: string;
     company_id: string;
     company_name: string;
@@ -105,10 +105,10 @@ export async function listCompanyInvites(companyId: string): Promise<CompanyInvi
 
 export async function revokeCompanyInvite(companyId: string, inviteId: string): Promise<void> {
   await ensureDatabaseSchema();
-  await getPool().query(
-    `DELETE FROM company_invites WHERE id = $1 AND company_id = $2 AND accepted_at IS NULL`,
-    [inviteId, companyId],
-  );
+  await query(`DELETE FROM company_invites WHERE id = $1 AND company_id = $2 AND accepted_at IS NULL`, [
+    inviteId,
+    companyId,
+  ]);
 }
 
 export type InvitePublicView = {
@@ -122,7 +122,7 @@ export type InvitePublicView = {
 
 export async function getInvitePublicView(token: string): Promise<InvitePublicView> {
   await ensureDatabaseSchema();
-  const result = await getPool().query<{
+  const result = await query<{
     email: string;
     role: string;
     accepted_at: string | null;
@@ -141,13 +141,13 @@ export async function getInvitePublicView(token: string): Promise<InvitePublicVi
   if (new Date(row.expires_at).getTime() < Date.now()) {
     return { valid: false, reason: "This invite has expired." };
   }
-  const user = await getPool().query("SELECT 1 FROM users WHERE email = $1", [row.email]);
+  const user = await query("SELECT 1 FROM users WHERE email = $1", [row.email]);
   return {
     valid: true,
     companyName: row.company_name,
     email: row.email,
     role: row.role,
-    existingUser: (user.rowCount ?? 0) > 0,
+    existingUser: user.rowCount > 0,
   };
 }
 
@@ -158,28 +158,30 @@ export async function acceptCompanyInvite(input: {
 }): Promise<{ token: string; session: Awaited<ReturnType<typeof buildSessionPayload>> }> {
   await ensureDatabaseSchema();
 
-  const inviteRow = await getPool().query<{
+  const inviteRow = await query<{
     id: string;
     company_id: string;
     email: string;
     role: CompanyRole;
     accepted_at: string | null;
     expires_at: string;
-  }>("SELECT * FROM company_invites WHERE token = $1", [input.token]);
+  }>("SELECT id, company_id, email, role, accepted_at, expires_at FROM company_invites WHERE token = $1", [
+    input.token,
+  ]);
   const invite = inviteRow.rows[0];
   if (!invite) throw new Error("Invite not found.");
   if (invite.accepted_at) throw new Error("Invite already used.");
   if (new Date(invite.expires_at).getTime() < Date.now()) throw new Error("Invite expired.");
 
   const email = invite.email;
-  const client = await getPool().connect();
-  try {
-    await client.query("BEGIN");
-    const existing = await client.query<{ id: string; password_hash: string }>(
+  let userId = "";
+  let sessionToken = "";
+
+  await withTransaction(async (conn) => {
+    const existing = await conn.query<{ id: string; password_hash: string }>(
       "SELECT id, password_hash FROM users WHERE email = $1",
       [email],
     );
-    let userId: string;
     if (existing.rows[0]) {
       const ok = await verifyPassword(input.password, existing.rows[0].password_hash);
       if (!ok) throw new Error("Incorrect password for this account.");
@@ -190,37 +192,33 @@ export async function acceptCompanyInvite(input: {
       if (!input.name?.trim()) throw new Error("Name is required.");
       userId = crypto.randomUUID();
       const passwordHash = await hashPassword(input.password);
-      await client.query(
-        `INSERT INTO users (id, email, name, password_hash) VALUES ($1, $2, $3, $4)`,
-        [userId, email, input.name.trim(), passwordHash],
-      );
+      await conn.query(`INSERT INTO users (id, email, name, password_hash) VALUES ($1, $2, $3, $4)`, [
+        userId,
+        email,
+        input.name.trim(),
+        passwordHash,
+      ]);
     }
 
-    await client.query(
+    await conn.query(
       `INSERT INTO company_members (company_id, user_id, role)
        VALUES ($1, $2, $3)
-       ON CONFLICT (company_id, user_id) DO UPDATE SET role = EXCLUDED.role`,
+       ON DUPLICATE KEY UPDATE role = VALUES(role)`,
       [invite.company_id, userId, invite.role],
     );
-    await client.query(`UPDATE company_invites SET accepted_at = now() WHERE id = $1`, [invite.id]);
+    await conn.query(`UPDATE company_invites SET accepted_at = NOW() WHERE id = $1`, [invite.id]);
 
-    const sessionToken = newSessionToken();
+    sessionToken = newSessionToken();
     const expiresAt = new Date(Date.now() + SESSION_MAX_AGE_SEC * 1000);
-    await client.query(
+    await conn.query(
       `INSERT INTO sessions (id, user_id, company_id, token_hash, expires_at)
        VALUES ($1, $2, $3, $4, $5)`,
-      [crypto.randomUUID(), userId, invite.company_id, hashSessionToken(sessionToken), expiresAt.toISOString()],
+      [crypto.randomUUID(), userId, invite.company_id, hashSessionToken(sessionToken), expiresAt],
     );
-    await client.query("COMMIT");
+  });
 
-    const session = await buildSessionPayload(userId, invite.company_id);
-    return { token: sessionToken, session };
-  } catch (e) {
-    await client.query("ROLLBACK");
-    throw e;
-  } finally {
-    client.release();
-  }
+  const session = await buildSessionPayload(userId, invite.company_id);
+  return { token: sessionToken, session };
 }
 
 export function inviteAcceptPath(token: string): string {
