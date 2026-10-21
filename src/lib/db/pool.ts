@@ -9,8 +9,10 @@ export type QueryResult<T> = {
   rowCount: number;
 };
 
+export type DbQueryParams = (string | number | boolean | Date | null | Buffer)[];
+
 export type DbConn = {
-  query<T>(sql: string, params?: unknown[]): Promise<QueryResult<T>>;
+  query<T>(sql: string, params?: DbQueryParams): Promise<QueryResult<T>>;
 };
 
 export function databaseConfigured(): boolean {
@@ -64,7 +66,7 @@ export function getPool(): Pool {
 async function runQuery<T>(
   runner: Pool | PoolConnection,
   sql: string,
-  params: unknown[] = [],
+  params: (string | number | boolean | Date | null | Buffer)[] = [],
 ): Promise<QueryResult<T>> {
   const q = toMysqlSql(sql);
   const [result] = await runner.execute(q, params);
@@ -75,13 +77,13 @@ async function runQuery<T>(
   return { rows: [], rowCount: header.affectedRows ?? 0 };
 }
 
-export async function query<T>(sql: string, params: unknown[] = []): Promise<QueryResult<T>> {
+export async function query<T>(sql: string, params: DbQueryParams = []): Promise<QueryResult<T>> {
   return runQuery<T>(getPool(), sql, params);
 }
 
 function wrapConnection(raw: PoolConnection): DbConn {
   return {
-    query: <T>(sql: string, params: unknown[] = []) => runQuery<T>(raw, sql, params),
+    query: <T>(sql: string, params: DbQueryParams = []) => runQuery<T>(raw, sql, params),
   };
 }
 

@@ -95,7 +95,15 @@ export async function appendGuestOrder(
 
 export async function listPendingGuestOrders(companyId: string): Promise<ServerGuestOrder[]> {
   await ensureDatabaseSchema();
-  const result = await query(
+  const result = await query<{
+    id: string;
+    table_id: string;
+    table_label: string;
+    lines: unknown;
+    note: string;
+    created_at: string | number;
+    acknowledged: number | boolean;
+  }>(
     `SELECT id, table_id, table_label, lines, note, created_at, acknowledged
      FROM pos_guest_orders
      WHERE company_id = $1 AND acknowledged = 0

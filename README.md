@@ -50,7 +50,7 @@ Serverless functions run on **Netlify’s network**, not on your VPS. If `DATABA
 1. **Cloud MySQL** — PlanetScale, Railway, or similar. Set `DATABASE_URL` in Netlify → Site configuration → Environment variables. Redeploy. Check `GET https://your-site.netlify.app/api/health`.
 2. **Same-server hosting** — Deploy the Node app on the **same machine** that runs MySQL (Docker/VPS), not Netlify.
 3. **Remote MySQL access** — In cPanel, add Netlify egress IPs under *Remote MySQL®* (fragile; cloud DB is easier).
-3. **Demo without auth** — Remove `DATABASE_URL` from Netlify so `/app` works without login (guest POS file mode only; no multi-tenant auth on server).
+4. **Demo without auth** — Remove `DATABASE_URL` from Netlify so `/app` works without login (guest POS file mode only; no multi-tenant auth on server).
 
 After changing `DATABASE_URL`, trigger a new deploy. Registration errors return **503** with a short message when the database is unreachable (not raw driver text).
 
