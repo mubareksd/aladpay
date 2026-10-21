@@ -7,19 +7,46 @@ export function databaseConfigured(): boolean {
   return Boolean(process.env.DATABASE_URL?.trim());
 }
 
+function isServerlessRuntime(): boolean {
+  return Boolean(
+    process.env.NETLIFY ||
+      process.env.AWS_LAMBDA_FUNCTION_NAME ||
+      process.env.VERCEL ||
+      process.env.CF_PAGES,
+  );
+}
+
+function inferSsl(connectionString: string): PoolConfig["ssl"] | undefined {
+  const sslMode = process.env.DATABASE_SSL?.trim().toLowerCase();
+  if (sslMode === "false" || sslMode === "disable") return false;
+  if (sslMode === "true") return { rejectUnauthorized: false };
+  if (sslMode === "require") return { rejectUnauthorized: true };
+
+  try {
+    const host = new URL(connectionString.replace(/^postgres(ql)?:\/\//, "postgresql://")).hostname;
+    const local = host === "localhost" || host === "127.0.0.1" || host === "::1";
+    if (!local) {
+      return { rejectUnauthorized: false };
+    }
+  } catch {
+    /* keep driver default */
+  }
+  return undefined;
+}
+
 function poolConfig(): PoolConfig {
   const connectionString = process.env.DATABASE_URL?.trim();
   if (!connectionString) {
     throw new Error("DATABASE_URL is not set");
   }
-  const config: PoolConfig = { connectionString, max: 10 };
-  const sslMode = process.env.DATABASE_SSL?.trim().toLowerCase();
-  if (sslMode === "true" || sslMode === "require") {
-    config.ssl = { rejectUnauthorized: sslMode !== "true" ? true : false };
-  }
-  if (sslMode === "false" || sslMode === "disable") {
-    config.ssl = false;
-  }
+  const config: PoolConfig = {
+    connectionString,
+    max: isServerlessRuntime() ? 1 : 10,
+    connectionTimeoutMillis: 10_000,
+    idleTimeoutMillis: isServerlessRuntime() ? 5_000 : 30_000,
+  };
+  const ssl = inferSsl(connectionString);
+  if (ssl !== undefined) config.ssl = ssl;
   return config;
 }
 

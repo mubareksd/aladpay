@@ -12,6 +12,7 @@ Generate Ethiopian bank and wallet payment QR codes for receiving money.
 - **Guest QR ordering** — publish menu to the server, table QR links to `/guest/{tableId}`; staff sync imports orders into the kitchen queue
 - Checkout payment per order when the bill is ready
 - Incoming payment verification and optional hosted checkout (server-configured)
+- **Receipt screenshot OCR** (Lubaak Vision) on Verify — auto-fills reference, link, amount
 - Export / import saved account backups
 
 ## Requirements
@@ -39,6 +40,18 @@ Generate Ethiopian bank and wallet payment QR codes for receiving money.
 - `POS_DATA_DIR` — file-store directory when `DATABASE_URL` is not set.
 
 Run `npm run db:check` after setting `DATABASE_URL` to verify connectivity and create POS tables.
+
+### Netlify / serverless
+
+Serverless functions run on **Netlify’s network**, not on your VPS. If `DATABASE_URL` points at a **cPanel Postgres IP** (e.g. `91.x.x.x:5432`), you often get **`ETIMEDOUT`** because remote PostgreSQL is disabled or firewalled.
+
+**Fix (pick one):**
+
+1. **Cloud Postgres** (recommended) — [Neon](https://neon.tech), Supabase, or Railway. Set `DATABASE_URL` in Netlify → Site configuration → Environment variables. Redeploy. Check `GET https://your-site.netlify.app/api/health`.
+2. **Same-server hosting** — Deploy the Node app on the **same machine** that runs Postgres (Docker/VPS), not Netlify.
+3. **Demo without auth** — Remove `DATABASE_URL` from Netlify so `/app` works without login (guest POS file mode only; no multi-tenant auth on server).
+
+After changing `DATABASE_URL`, trigger a new deploy. Registration errors return **503** with a short message when the database is unreachable (not raw driver text).
 
 ## Accounts & companies
 

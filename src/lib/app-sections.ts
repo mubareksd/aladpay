@@ -36,7 +36,7 @@ export const APP_NAV_ITEMS: readonly AppNavItem[] = [
     id: "verify",
     label: "Verify payment",
     shortLabel: "Verify",
-    description: "Confirm a customer transfer using a receipt link or reference.",
+    description: "Confirm a transfer — upload a receipt screenshot or enter a link or reference.",
   },
   {
     id: "decoder",

@@ -7,6 +7,8 @@ import type {
   AladVerifyRequestBody,
   AladVerifyResponse,
 } from "@/lib/alad/types";
+import { scanReceiptImage } from "@/lib/vision/receipt-client";
+import type { ReceiptOcrHints } from "@/lib/vision/types";
 import {
   btnPrimaryClass,
   btnSecondaryClass,
@@ -50,6 +52,8 @@ export function AladVerifyPanel({ defaults }: AladVerifyPanelProps) {
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<AladVerifyResponse | null>(null);
   const [retryAfter, setRetryAfter] = useState<string | null>(null);
+  const [ocrLoading, setOcrLoading] = useState(false);
+  const [ocrNote, setOcrNote] = useState<string | null>(null);
 
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [checkoutAmount, setCheckoutAmount] = useState(() => defaults?.expectedAmount ?? "");
@@ -95,6 +99,47 @@ export function AladVerifyPanel({ defaults }: AladVerifyPanelProps) {
     settlementAccount,
     url,
   ]);
+
+  const applyReceiptHints = useCallback((hints: ReceiptOcrHints) => {
+    if (hints.receiptUrl) {
+      setMode("url");
+      setUrl(hints.receiptUrl);
+    } else if (hints.reference) {
+      setMode("reference");
+      setReference(hints.reference);
+    }
+    if (hints.aladBank) setBank(hints.aladBank);
+    if (hints.amountEtb) setExpectedAmount(hints.amountEtb);
+    if (hints.phone) setPhone(hints.phone);
+    setOcrNote("Fields updated from receipt — review before verifying.");
+    setError(null);
+  }, []);
+
+  const onReceiptImage = useCallback(
+    (file: File) => {
+      setOcrLoading(true);
+      setOcrNote(null);
+      setError(null);
+      void scanReceiptImage(file)
+        .then((hints) => {
+          if (
+            !hints.receiptUrl &&
+            !hints.reference &&
+            !hints.amountEtb &&
+            !hints.phone
+          ) {
+            setOcrNote("No reference or link found. Enter details manually or try a clearer screenshot.");
+            return;
+          }
+          applyReceiptHints(hints);
+        })
+        .catch((e) => {
+          setError(e instanceof Error ? e.message : "Could not read receipt.");
+        })
+        .finally(() => setOcrLoading(false));
+    },
+    [applyReceiptHints],
+  );
 
   const runVerify = useCallback(async () => {
     setLoading(true);
@@ -190,6 +235,34 @@ export function AladVerifyPanel({ defaults }: AladVerifyPanelProps) {
           Verification is not enabled on this deployment.
         </p>
       ) : null}
+
+      <div className="rounded border border-dashed border-border bg-background/60 p-4">
+        <p className="text-xs font-medium text-foreground">Receipt screenshot</p>
+        <p className="mt-1 text-xs text-muted">
+          Upload a payer receipt image to fill reference, link, amount, or phone (Lubaak Vision OCR).
+        </p>
+        <label className="mt-3 inline-flex cursor-pointer">
+          <span className={btnSecondaryClass + " !min-h-9 w-auto px-4 text-xs"}>
+            {ocrLoading ? "Reading receipt…" : "Choose image"}
+          </span>
+          <input
+            type="file"
+            accept="image/*"
+            className="sr-only"
+            disabled={ocrLoading}
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) onReceiptImage(file);
+              e.target.value = "";
+            }}
+          />
+        </label>
+        {ocrNote ? (
+          <p className="mt-2 text-xs text-muted" role="status">
+            {ocrNote}
+          </p>
+        ) : null}
+      </div>
 
       <fieldset>
         <legend className="mb-2 text-xs font-medium text-muted">Lookup</legend>

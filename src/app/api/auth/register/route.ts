@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { registerOwnerWithCompany } from "@/lib/auth/repository";
 import { SESSION_COOKIE, sessionCookieOptions } from "@/lib/auth/session-cookie";
+import { publicDatabaseError } from "@/lib/db/errors";
 import { databaseConfigured } from "@/lib/db/pool";
 
 export async function POST(request: Request) {
@@ -35,7 +36,7 @@ export async function POST(request: Request) {
     jar.set(SESSION_COOKIE, token, sessionCookieOptions(secure));
     return NextResponse.json({ ok: true, session });
   } catch (e) {
-    const message = e instanceof Error ? e.message : "Registration failed.";
-    return NextResponse.json({ error: message }, { status: 400 });
+    const { httpStatus, message } = publicDatabaseError(e);
+    return NextResponse.json({ error: message }, { status: httpStatus });
   }
 }
