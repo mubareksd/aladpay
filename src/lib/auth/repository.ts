@@ -1,27 +1,31 @@
+import { and, asc, desc, eq, gt, sql } from "drizzle-orm";
 import {
-  ensureDatabaseSchema,
-  query,
-  withTransaction,
-  type DbConn,
-} from "@/lib/db/pool";
+  companies,
+  companyMembers,
+  sessions,
+  users,
+} from "@/lib/db/schema";
+import { ensureDatabaseSchema, getDb, type DbTransaction } from "@/lib/db/client";
 import { hashPassword, validatePasswordPolicy, verifyPassword } from "@/lib/auth/password";
 import { slugifyCompanyName, withUniqueSuffix } from "@/lib/auth/slug";
 import { hashSessionToken, newSessionToken } from "@/lib/auth/session-token";
 import { SESSION_MAX_AGE_SEC } from "@/lib/auth/session-cookie";
 import type { AuthCompany, AuthUser, CompanyRole, SessionPayload } from "@/lib/auth/types";
 
-type UserRow = { id: string; email: string; name: string; password_hash: string };
-
 export function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
 }
 
-async function uniqueCompanySlug(name: string, conn: DbConn): Promise<string> {
+async function uniqueCompanySlug(name: string, tx: DbTransaction): Promise<string> {
   const base = slugifyCompanyName(name);
   for (let attempt = 0; attempt < 20; attempt += 1) {
     const slug = withUniqueSuffix(base, attempt);
-    const exists = await conn.query("SELECT 1 FROM companies WHERE slug = $1", [slug]);
-    if (exists.rowCount === 0) return slug;
+    const exists = await tx
+      .select({ id: companies.id })
+      .from(companies)
+      .where(eq(companies.slug, slug))
+      .limit(1);
+    if (exists.length === 0) return slug;
   }
   return `${base}-${crypto.randomUUID().slice(0, 8)}`;
 }
@@ -45,33 +49,36 @@ export async function registerOwnerWithCompany(input: {
   const token = newSessionToken();
   const expiresAt = new Date(Date.now() + SESSION_MAX_AGE_SEC * 1000);
 
-  await withTransaction(async (conn) => {
-    const existing = await conn.query("SELECT 1 FROM users WHERE email = $1", [email]);
-    if (existing.rowCount) throw new Error("An account with this email already exists.");
+  await getDb().transaction(async (tx) => {
+    const existing = await tx.select({ id: users.id }).from(users).where(eq(users.email, email)).limit(1);
+    if (existing.length) throw new Error("An account with this email already exists.");
 
-    await conn.query(`INSERT INTO users (id, email, name, password_hash) VALUES ($1, $2, $3, $4)`, [
-      userId,
+    await tx.insert(users).values({
+      id: userId,
       email,
-      input.name.trim(),
+      name: input.name.trim(),
       passwordHash,
-    ]);
+    });
 
-    const slug = await uniqueCompanySlug(input.companyName, conn);
-    await conn.query(`INSERT INTO companies (id, name, slug, owner_user_id) VALUES ($1, $2, $3, $4)`, [
-      companyId,
-      input.companyName.trim(),
+    const slug = await uniqueCompanySlug(input.companyName, tx);
+    await tx.insert(companies).values({
+      id: companyId,
+      name: input.companyName.trim(),
       slug,
-      userId,
-    ]);
-    await conn.query(`INSERT INTO company_members (company_id, user_id, role) VALUES ($1, $2, 'owner')`, [
+      ownerUserId: userId,
+    });
+    await tx.insert(companyMembers).values({
       companyId,
       userId,
-    ]);
-    await conn.query(
-      `INSERT INTO sessions (id, user_id, company_id, token_hash, expires_at)
-       VALUES ($1, $2, $3, $4, $5)`,
-      [crypto.randomUUID(), userId, companyId, hashSessionToken(token), expiresAt],
-    );
+      role: "owner",
+    });
+    await tx.insert(sessions).values({
+      id: crypto.randomUUID(),
+      userId,
+      companyId,
+      tokenHash: hashSessionToken(token),
+      expiresAt,
+    });
   });
 
   const session = await buildSessionPayload(userId, companyId);
@@ -84,24 +91,32 @@ export async function loginUser(input: {
 }): Promise<{ token: string; session: SessionPayload }> {
   await ensureDatabaseSchema();
   const email = normalizeEmail(input.email);
-  const result = await query<UserRow>(
-    "SELECT id, email, name, password_hash FROM users WHERE email = $1",
-    [email],
-  );
-  const row = result.rows[0];
+  const row = await getDb()
+    .select({
+      id: users.id,
+      email: users.email,
+      name: users.name,
+      passwordHash: users.passwordHash,
+    })
+    .from(users)
+    .where(eq(users.email, email))
+    .limit(1)
+    .then((r) => r[0]);
   if (!row) throw new Error("Invalid email or password.");
-  const ok = await verifyPassword(input.password, row.password_hash);
+  const ok = await verifyPassword(input.password, row.passwordHash);
   if (!ok) throw new Error("Invalid email or password.");
 
-  const companies = await listCompaniesForUser(row.id);
-  const companyId = companies[0]?.id ?? null;
+  const companiesForUser = await listCompaniesForUser(row.id);
+  const companyId = companiesForUser[0]?.id ?? null;
   const token = newSessionToken();
   const expiresAt = new Date(Date.now() + SESSION_MAX_AGE_SEC * 1000);
-  await query(
-    `INSERT INTO sessions (id, user_id, company_id, token_hash, expires_at)
-     VALUES ($1, $2, $3, $4, $5)`,
-    [crypto.randomUUID(), row.id, companyId, hashSessionToken(token), expiresAt],
-  );
+  await getDb().insert(sessions).values({
+    id: crypto.randomUUID(),
+    userId: row.id,
+    companyId,
+    tokenHash: hashSessionToken(token),
+    expiresAt,
+  });
   const session = await buildSessionPayload(row.id, companyId);
   return { token, session };
 }
@@ -109,20 +124,20 @@ export async function loginUser(input: {
 export async function logoutSession(token: string): Promise<void> {
   if (!token) return;
   await ensureDatabaseSchema();
-  await query("DELETE FROM sessions WHERE token_hash = $1", [hashSessionToken(token)]);
+  await getDb().delete(sessions).where(eq(sessions.tokenHash, hashSessionToken(token)));
 }
 
 export async function resolveSession(token: string | undefined): Promise<SessionPayload | null> {
   if (!token) return null;
   await ensureDatabaseSchema();
-  const result = await query<{ user_id: string; company_id: string | null }>(
-    `SELECT user_id, company_id FROM sessions
-     WHERE token_hash = $1 AND expires_at > NOW()`,
-    [hashSessionToken(token)],
-  );
-  const row = result.rows[0];
+  const row = await getDb()
+    .select({ userId: sessions.userId, companyId: sessions.companyId })
+    .from(sessions)
+    .where(and(eq(sessions.tokenHash, hashSessionToken(token)), gt(sessions.expiresAt, new Date())))
+    .limit(1)
+    .then((r) => r[0]);
   if (!row) return null;
-  return buildSessionPayload(row.user_id, row.company_id);
+  return buildSessionPayload(row.userId, row.companyId);
 }
 
 export async function switchActiveCompany(
@@ -132,27 +147,30 @@ export async function switchActiveCompany(
   const session = await resolveSession(token);
   if (!session) return null;
   if (!session.companies.some((c) => c.id === companyId)) return null;
-  await query(`UPDATE sessions SET company_id = $1 WHERE token_hash = $2`, [
-    companyId,
-    hashSessionToken(token),
-  ]);
+  await getDb()
+    .update(sessions)
+    .set({ companyId })
+    .where(eq(sessions.tokenHash, hashSessionToken(token)));
   return buildSessionPayload(session.user.id, companyId);
 }
 
 async function listCompaniesForUser(userId: string): Promise<AuthCompany[]> {
-  const result = await query<{ id: string; name: string; slug: string; role: CompanyRole }>(
-    `SELECT c.id, c.name, c.slug, m.role
-     FROM company_members m
-     JOIN companies c ON c.id = m.company_id
-     WHERE m.user_id = $1
-     ORDER BY c.name`,
-    [userId],
-  );
-  return result.rows.map((r) => ({
+  const rows = await getDb()
+    .select({
+      id: companies.id,
+      name: companies.name,
+      slug: companies.slug,
+      role: companyMembers.role,
+    })
+    .from(companyMembers)
+    .innerJoin(companies, eq(companies.id, companyMembers.companyId))
+    .where(eq(companyMembers.userId, userId))
+    .orderBy(asc(companies.name));
+  return rows.map((r) => ({
     id: r.id,
     name: r.name,
     slug: r.slug,
-    role: r.role,
+    role: r.role as CompanyRole,
   }));
 }
 
@@ -160,15 +178,19 @@ export async function buildSessionPayload(
   userId: string,
   activeCompanyId: string | null,
 ): Promise<SessionPayload> {
-  const userResult = await query<AuthUser>("SELECT id, email, name FROM users WHERE id = $1", [userId]);
-  const user = userResult.rows[0];
+  const user = await getDb()
+    .select({ id: users.id, email: users.email, name: users.name })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1)
+    .then((r) => r[0]);
   if (!user) throw new Error("User not found.");
-  const companies = await listCompaniesForUser(userId);
+  const companiesForUser = await listCompaniesForUser(userId);
   let activeCompany = activeCompanyId
-    ? (companies.find((c) => c.id === activeCompanyId) ?? null)
+    ? (companiesForUser.find((c) => c.id === activeCompanyId) ?? null)
     : null;
-  if (!activeCompany && companies.length > 0) activeCompany = companies[0] ?? null;
-  return { user, companies, activeCompany };
+  if (!activeCompany && companiesForUser.length > 0) activeCompany = companiesForUser[0] ?? null;
+  return { user, companies: companiesForUser, activeCompany };
 }
 
 export type CompanyMember = {
@@ -181,26 +203,24 @@ export type CompanyMember = {
 
 export async function listCompanyMembers(companyId: string): Promise<CompanyMember[]> {
   await ensureDatabaseSchema();
-  const result = await query<{
-    user_id: string;
-    email: string;
-    name: string;
-    role: CompanyRole;
-    created_at: string;
-  }>(
-    `SELECT u.id AS user_id, u.email, u.name, m.role, m.created_at
-     FROM company_members m
-     JOIN users u ON u.id = m.user_id
-     WHERE m.company_id = $1
-     ORDER BY (m.role = 'owner') DESC, u.name`,
-    [companyId],
-  );
-  return result.rows.map((r) => ({
-    userId: r.user_id,
+  const rows = await getDb()
+    .select({
+      userId: users.id,
+      email: users.email,
+      name: users.name,
+      role: companyMembers.role,
+      joinedAt: companyMembers.createdAt,
+    })
+    .from(companyMembers)
+    .innerJoin(users, eq(users.id, companyMembers.userId))
+    .where(eq(companyMembers.companyId, companyId))
+    .orderBy(desc(sql`${companyMembers.role} = 'owner'`), asc(users.name));
+  return rows.map((r) => ({
+    userId: r.userId,
     email: r.email,
     name: r.name,
-    role: r.role,
-    joinedAt: r.created_at,
+    role: r.role as CompanyRole,
+    joinedAt: r.joinedAt,
   }));
 }
 
@@ -218,33 +238,38 @@ export async function addCompanyEmployee(input: {
   if (policy) throw new Error(policy);
   if (!input.name.trim()) throw new Error("Employee name is required.");
 
-  await withTransaction(async (conn) => {
+  await getDb().transaction(async (tx) => {
     let userId: string;
-    const existing = await conn.query<UserRow>("SELECT id, email, name, password_hash FROM users WHERE email = $1", [
-      email,
-    ]);
-    if (existing.rows[0]) {
-      userId = existing.rows[0].id;
-      const member = await conn.query(
-        "SELECT 1 FROM company_members WHERE company_id = $1 AND user_id = $2",
-        [input.companyId, userId],
-      );
-      if (member.rowCount) throw new Error("This user is already on your team.");
+    const existing = await tx
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.email, email))
+      .limit(1)
+      .then((r) => r[0]);
+    if (existing) {
+      userId = existing.id;
+      const member = await tx
+        .select({ userId: companyMembers.userId })
+        .from(companyMembers)
+        .where(and(eq(companyMembers.companyId, input.companyId), eq(companyMembers.userId, userId)))
+        .limit(1);
+      if (member.length) throw new Error("This user is already on your team.");
     } else {
       userId = crypto.randomUUID();
       const passwordHash = await hashPassword(input.password);
-      await conn.query(`INSERT INTO users (id, email, name, password_hash) VALUES ($1, $2, $3, $4)`, [
-        userId,
+      await tx.insert(users).values({
+        id: userId,
         email,
-        input.name.trim(),
+        name: input.name.trim(),
         passwordHash,
-      ]);
+      });
     }
-    await conn.query(
-      `INSERT INTO company_members (company_id, user_id, role, invited_by)
-       VALUES ($1, $2, $3, $4)`,
-      [input.companyId, userId, input.role, input.actorUserId],
-    );
+    await tx.insert(companyMembers).values({
+      companyId: input.companyId,
+      userId,
+      role: input.role,
+      invitedBy: input.actorUserId,
+    });
   });
 
   const members = await listCompanyMembers(input.companyId);
@@ -258,22 +283,30 @@ export async function removeCompanyMember(input: {
   targetUserId: string;
 }): Promise<void> {
   await ensureDatabaseSchema();
-  const target = await query<{ role: CompanyRole }>(
-    "SELECT role FROM company_members WHERE company_id = $1 AND user_id = $2",
-    [input.companyId, input.targetUserId],
-  );
-  if (!target.rows[0]) throw new Error("Member not found.");
-  if (target.rows[0].role === "owner") throw new Error("Cannot remove the company owner.");
-  await query("DELETE FROM company_members WHERE company_id = $1 AND user_id = $2", [
-    input.companyId,
-    input.targetUserId,
-  ]);
+  const target = await getDb()
+    .select({ role: companyMembers.role })
+    .from(companyMembers)
+    .where(
+      and(eq(companyMembers.companyId, input.companyId), eq(companyMembers.userId, input.targetUserId)),
+    )
+    .limit(1)
+    .then((r) => r[0]);
+  if (!target) throw new Error("Member not found.");
+  if (target.role === "owner") throw new Error("Cannot remove the company owner.");
+  await getDb()
+    .delete(companyMembers)
+    .where(
+      and(eq(companyMembers.companyId, input.companyId), eq(companyMembers.userId, input.targetUserId)),
+    );
 }
 
 export async function getCompanyIdBySlug(slug: string): Promise<string | null> {
   await ensureDatabaseSchema();
-  const result = await query<{ id: string }>("SELECT id FROM companies WHERE slug = $1", [
-    slug.trim().toLowerCase(),
-  ]);
-  return result.rows[0]?.id ?? null;
+  const row = await getDb()
+    .select({ id: companies.id })
+    .from(companies)
+    .where(eq(companies.slug, slug.trim().toLowerCase()))
+    .limit(1)
+    .then((r) => r[0]);
+  return row?.id ?? null;
 }

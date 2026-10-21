@@ -1,5 +1,6 @@
-import { ensureDatabaseSchema, query } from "@/lib/db/pool";
-import { parseJsonColumn } from "@/lib/db/sql";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { posGuestOrders, posPublishedMenu } from "@/lib/db/schema";
+import { ensureDatabaseSchema, getDb } from "@/lib/db/client";
 import type { PublishedGuestMenu, ServerGuestOrder } from "@/lib/pos/types";
 
 const DEFAULT_PUBLIC: PublishedGuestMenu = {
@@ -9,35 +10,15 @@ const DEFAULT_PUBLIC: PublishedGuestMenu = {
   menuItems: [],
 };
 
-function rowToOrder(row: {
-  id: string;
-  table_id: string;
-  table_label: string;
-  lines: unknown;
-  note: string;
-  created_at: string | number;
-  acknowledged: number | boolean;
-}): ServerGuestOrder {
-  return {
-    id: row.id,
-    tableId: row.table_id,
-    tableLabel: row.table_label,
-    lines: parseJsonColumn<ServerGuestOrder["lines"]>(row.lines),
-    note: row.note,
-    createdAt: Number(row.created_at),
-    acknowledged: Boolean(row.acknowledged),
-  };
-}
-
 export async function getPublishedMenu(companyId: string): Promise<PublishedGuestMenu> {
   await ensureDatabaseSchema();
-  const result = await query<{ menu: unknown }>(
-    "SELECT menu FROM pos_published_menu WHERE company_id = $1",
-    [companyId],
-  );
-  const raw = result.rows[0]?.menu;
-  if (raw == null) return DEFAULT_PUBLIC;
-  const menu = parseJsonColumn<PublishedGuestMenu>(raw);
+  const row = await getDb()
+    .select({ menu: posPublishedMenu.menu })
+    .from(posPublishedMenu)
+    .where(eq(posPublishedMenu.companyId, companyId))
+    .limit(1)
+    .then((r) => r[0]);
+  const menu = row?.menu;
   if (!menu || typeof menu !== "object") return DEFAULT_PUBLIC;
   return menu;
 }
@@ -48,12 +29,19 @@ export async function publishGuestMenu(
 ): Promise<PublishedGuestMenu> {
   await ensureDatabaseSchema();
   const published = { ...menu, updatedAt: Date.now() };
-  await query(
-    `INSERT INTO pos_published_menu (company_id, menu, updated_at)
-     VALUES ($1, $2, $3)
-     ON DUPLICATE KEY UPDATE menu = VALUES(menu), updated_at = VALUES(updated_at)`,
-    [companyId, JSON.stringify(published), published.updatedAt],
-  );
+  await getDb()
+    .insert(posPublishedMenu)
+    .values({
+      companyId,
+      menu: published,
+      updatedAt: published.updatedAt,
+    })
+    .onDuplicateKeyUpdate({
+      set: {
+        menu: published,
+        updatedAt: published.updatedAt,
+      },
+    });
   return published;
 }
 
@@ -68,60 +56,61 @@ export async function appendGuestOrder(
     createdAt: Date.now(),
     acknowledged: false,
   };
-  await query(
-    `INSERT INTO pos_guest_orders (id, company_id, table_id, table_label, lines, note, created_at, acknowledged)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, 0)`,
-    [
-      entry.id,
-      companyId,
-      entry.tableId,
-      entry.tableLabel,
-      JSON.stringify(entry.lines),
-      entry.note,
-      entry.createdAt,
-    ],
-  );
-  await query(
-    `DELETE FROM pos_guest_orders
-     WHERE company_id = $1 AND id IN (
-       SELECT id FROM (
-         SELECT id FROM pos_guest_orders WHERE company_id = $1 ORDER BY created_at DESC LIMIT 999999 OFFSET 200
-       ) AS overflow
-     )`,
-    [companyId],
-  );
+  await getDb().insert(posGuestOrders).values({
+    id: entry.id,
+    companyId,
+    tableId: entry.tableId,
+    tableLabel: entry.tableLabel,
+    orderLines: entry.lines,
+    note: entry.note,
+    createdAt: entry.createdAt,
+    acknowledged: false,
+  });
+  await getDb().execute(sql`
+    DELETE FROM pos_guest_orders
+    WHERE company_id = ${companyId} AND id IN (
+      SELECT id FROM (
+        SELECT id FROM pos_guest_orders
+        WHERE company_id = ${companyId}
+        ORDER BY created_at DESC
+        LIMIT 999999 OFFSET 200
+      ) AS overflow
+    )
+  `);
   return entry;
 }
 
 export async function listPendingGuestOrders(companyId: string): Promise<ServerGuestOrder[]> {
   await ensureDatabaseSchema();
-  const result = await query<{
-    id: string;
-    table_id: string;
-    table_label: string;
-    lines: unknown;
-    note: string;
-    created_at: string | number;
-    acknowledged: number | boolean;
-  }>(
-    `SELECT id, table_id, table_label, lines, note, created_at, acknowledged
-     FROM pos_guest_orders
-     WHERE company_id = $1 AND acknowledged = 0
-     ORDER BY created_at DESC
-     LIMIT 100`,
-    [companyId],
-  );
-  return result.rows.map(rowToOrder);
+  const rows = await getDb()
+    .select()
+    .from(posGuestOrders)
+    .where(and(eq(posGuestOrders.companyId, companyId), eq(posGuestOrders.acknowledged, false)))
+    .orderBy(desc(posGuestOrders.createdAt))
+    .limit(100);
+  return rows.map((row) => ({
+    id: row.id,
+    tableId: row.tableId,
+    tableLabel: row.tableLabel,
+    lines: row.orderLines,
+    note: row.note,
+    createdAt: row.createdAt,
+    acknowledged: row.acknowledged,
+  }));
 }
 
 export async function acknowledgeGuestOrders(companyId: string, ids: string[]): Promise<number> {
   if (ids.length === 0) return 0;
   await ensureDatabaseSchema();
-  const placeholders = ids.map((_, i) => `$${i + 2}`).join(", ");
-  const result = await query(
-    `UPDATE pos_guest_orders SET acknowledged = 1
-     WHERE company_id = $1 AND id IN (${placeholders}) AND acknowledged = 0`,
-    [companyId, ...ids],
-  );
-  return result.rowCount ?? 0;
+  const result = await getDb()
+    .update(posGuestOrders)
+    .set({ acknowledged: true })
+    .where(
+      and(
+        eq(posGuestOrders.companyId, companyId),
+        inArray(posGuestOrders.id, ids),
+        eq(posGuestOrders.acknowledged, false),
+      ),
+    );
+  return result[0]?.affectedRows ?? 0;
 }

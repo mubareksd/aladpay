@@ -1,4 +1,6 @@
-import { databaseConfigured, ensureDatabaseSchema, query } from "@/lib/db/pool";
+import { sql } from "drizzle-orm";
+import { databaseConfigured } from "@/lib/db/pool";
+import { ensureDatabaseSchema, getDb } from "@/lib/db/client";
 
 export type HealthCheck = {
   key: string;
@@ -43,7 +45,7 @@ export async function buildHealthSnapshot(): Promise<HealthSnapshot> {
     checks.push(
       await runCheck("database", "Database", async () => {
         await ensureDatabaseSchema();
-        await query("SELECT 1");
+        await getDb().execute(sql`SELECT 1`);
         return "Connected";
       }),
     );
