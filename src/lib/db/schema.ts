@@ -11,8 +11,7 @@ import {
   tinyint,
   varchar,
 } from "drizzle-orm/mysql-core";
-import type { OrderLine } from "@/lib/pos/types";
-import type { PublishedGuestMenu } from "@/lib/pos/types";
+import type { GuestOrderSubmit, PublishedGuestMenu } from "@/lib/pos/types";
 
 export const users = mysqlTable("users", {
   id: char("id", { length: 36 }).primaryKey(),
@@ -95,7 +94,7 @@ export const posGuestOrders = mysqlTable(
     orderLines: json("order_lines").$type<OrderLine[]>().notNull(),
     note: text("note").notNull(),
     createdAt: bigint("created_at", { mode: "number" }).notNull(),
-    acknowledged: tinyint("acknowledged", { mode: "boolean" }).notNull().default(false),
+    acknowledged: tinyint("acknowledged").notNull().default(0),
   },
   (t) => ({
     pendingIdx: index("pos_guest_pending_idx").on(t.companyId, t.acknowledged, t.createdAt),

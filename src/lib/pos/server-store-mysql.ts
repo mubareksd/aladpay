@@ -64,7 +64,7 @@ export async function appendGuestOrder(
     orderLines: entry.lines,
     note: entry.note,
     createdAt: entry.createdAt,
-    acknowledged: false,
+    acknowledged: 0,
   });
   await getDb().execute(sql`
     DELETE FROM pos_guest_orders
@@ -85,7 +85,7 @@ export async function listPendingGuestOrders(companyId: string): Promise<ServerG
   const rows = await getDb()
     .select()
     .from(posGuestOrders)
-    .where(and(eq(posGuestOrders.companyId, companyId), eq(posGuestOrders.acknowledged, false)))
+    .where(and(eq(posGuestOrders.companyId, companyId), eq(posGuestOrders.acknowledged, 0)))
     .orderBy(desc(posGuestOrders.createdAt))
     .limit(100);
   return rows.map((row) => ({
@@ -95,7 +95,7 @@ export async function listPendingGuestOrders(companyId: string): Promise<ServerG
     lines: row.orderLines,
     note: row.note,
     createdAt: row.createdAt,
-    acknowledged: row.acknowledged,
+    acknowledged: Boolean(row.acknowledged),
   }));
 }
 
@@ -104,12 +104,12 @@ export async function acknowledgeGuestOrders(companyId: string, ids: string[]): 
   await ensureDatabaseSchema();
   const result = await getDb()
     .update(posGuestOrders)
-    .set({ acknowledged: true })
+    .set({ acknowledged: 1 })
     .where(
       and(
         eq(posGuestOrders.companyId, companyId),
         inArray(posGuestOrders.id, ids),
-        eq(posGuestOrders.acknowledged, false),
+        eq(posGuestOrders.acknowledged, 0),
       ),
     );
   return result[0]?.affectedRows ?? 0;

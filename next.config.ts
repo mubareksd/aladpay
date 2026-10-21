@@ -15,6 +15,9 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
   reactStrictMode: true,
   output: "standalone",
+  outputFileTracingIncludes: {
+    "/*": ["./drizzle/**/*"],
+  },
   cacheComponents: true,
   partialPrefetching: true,
   turbopack: {
