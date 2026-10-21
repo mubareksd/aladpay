@@ -1,4 +1,8 @@
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import mysql from "mysql2/promise";
+import { drizzle } from "drizzle-orm/mysql2";
+import { migrate } from "drizzle-orm/mysql2/migrator";
 
 const url = process.env.DATABASE_URL?.trim();
 if (!url) {
@@ -27,21 +31,15 @@ if (sslMode === "true") config.ssl = { rejectUnauthorized: false };
 else if (sslMode === "require") config.ssl = { rejectUnauthorized: true };
 
 const pool = mysql.createPool(config);
+const root = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 try {
   const [rows] = await pool.query("SELECT VERSION() AS version");
   const version = rows[0]?.version ?? "ok";
   console.log("Connected:", String(version).slice(0, 60));
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS users (
-      id CHAR(36) PRIMARY KEY,
-      email VARCHAR(255) NOT NULL UNIQUE,
-      name VARCHAR(255) NOT NULL,
-      password_hash TEXT NOT NULL,
-      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-  `);
-  console.log("Schema bootstrap OK (users table).");
+  const db = drizzle(pool);
+  await migrate(db, { migrationsFolder: path.join(root, "drizzle") });
+  console.log("Drizzle migrations applied.");
 } catch (err) {
   console.error("Connection failed:", err instanceof Error ? err.message : err);
   process.exitCode = 1;

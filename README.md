@@ -39,7 +39,7 @@ Generate Ethiopian bank and wallet payment QR codes for receiving money.
 - `DATABASE_SSL` — `false`, `true` (allow self-signed), or `require` for verified TLS.
 - `POS_DATA_DIR` — file-store directory when `DATABASE_URL` is not set.
 
-Run `npm run db:check` after setting `DATABASE_URL` to verify connectivity and create POS tables.
+Run `npm run db:check` after setting `DATABASE_URL` to verify connectivity and apply [Drizzle](https://orm.drizzle.team) migrations (`drizzle/`). Schema changes: `npm run db:generate` then commit SQL.
 
 ### Netlify / serverless
 

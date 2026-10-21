@@ -91,7 +91,7 @@ export const posGuestOrders = mysqlTable(
       .references(() => companies.id, { onDelete: "cascade" }),
     tableId: varchar("table_id", { length: 64 }).notNull(),
     tableLabel: varchar("table_label", { length: 255 }).notNull(),
-    orderLines: json("order_lines").$type<OrderLine[]>().notNull(),
+    orderLines: json("order_lines").$type<GuestOrderSubmit["lines"]>().notNull(),
     note: text("note").notNull(),
     createdAt: bigint("created_at", { mode: "number" }).notNull(),
     acknowledged: tinyint("acknowledged").notNull().default(0),
